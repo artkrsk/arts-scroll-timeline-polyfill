@@ -1,0 +1,73 @@
+{
+  "name": "arts/scroll-timeline-polyfill",
+  "description": "Registers the flackr scroll-timeline polyfill as a self-gating WordPress script for browsers without native CSS scroll-driven animations, plus an opt-out API for stylesheets the polyfill must not transpile.",
+  "type": "library",
+  "minimum-stability": "dev",
+  "repositories": [
+    {
+      "type": "path",
+      "url": "../ArtsBase",
+      "options": {
+        "symlink": true
+      }
+    },
+    {
+      "type": "path",
+      "url": "../ArtsUtilities",
+      "options": {
+        "symlink": true
+      }
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Arts\\ScrollTimelinePolyfill\\": "src/php/"
+    }
+  },
+  "authors": [
+    {
+      "name": "Artem Semkin",
+      "email": "me@artemsemkin.com"
+    }
+  ],
+  "require": {
+    "php": ">=8.0",
+    "arts/base": "@dev",
+    "arts/utilities": "@dev"
+  },
+  "require-dev": {
+    "captainhook/captainhook": "^5.27",
+    "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+    "ergebnis/composer-normalize": "^2.48",
+    "phpstan/phpstan": "^2.0",
+    "squizlabs/php_codesniffer": "^3.13.4",
+    "szepeviktor/phpstan-wordpress": "^2.0",
+    "wp-coding-standards/wpcs": "^3.0"
+  },
+  "config": {
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true,
+      "ergebnis/composer-normalize": true
+    },
+    "optimize-autoloader": true,
+    "sort-packages": true
+  },
+  "scripts": {
+    "post-install-cmd": [
+      "vendor/bin/captainhook install -f -s"
+    ],
+    "post-update-cmd": [
+      "vendor/bin/captainhook install -f -s"
+    ],
+    "check": [
+      "@phpcs",
+      "@phpstan"
+    ],
+    "fix": "@phpcbf",
+    "normalize": "composer-normalize",
+    "phpcbf": "phpcbf --standard=phpcs.xml",
+    "phpcs": "phpcs --standard=phpcs.xml",
+    "phpstan": "phpstan analyse --memory-limit=1G",
+    "phpstan:baseline": "phpstan analyse --memory-limit=1G --generate-baseline"
+  }
+}
