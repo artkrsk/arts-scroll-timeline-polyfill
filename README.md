@@ -9,8 +9,10 @@ Browsers with native support download a ~600-byte loader and nothing else. Every
 Boot the plugin from your own plugin's bootstrap:
 
 ```php
-\Arts\ScrollTimelinePolyfill\Plugin::instance( __FILE__ );
+\Arts\ScrollTimelinePolyfill\Plugin::instance();
 ```
+
+If your plugin prefixes its vendor tree (Strauss and friends), call the prefixed class — the package resolves its own asset URLs from wherever it ends up.
 
 Then depend on the registered handle — that's what orders the loader ahead of your code:
 
