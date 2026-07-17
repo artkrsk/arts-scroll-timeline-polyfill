@@ -2,6 +2,7 @@
   "name": "arts/scroll-timeline-polyfill",
   "description": "Registers the flackr scroll-timeline polyfill as a self-gating WordPress script for browsers without native CSS scroll-driven animations, plus an opt-out API for stylesheets the polyfill must not transpile.",
   "type": "library",
+  "license": "GPL-3.0-or-later",
   "minimum-stability": "dev",
   "repositories": [
     {
