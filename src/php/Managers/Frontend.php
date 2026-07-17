@@ -12,8 +12,12 @@ class Frontend extends BaseManager {
 	/** @var string Consumer-facing handle — depend on it or enqueue it directly. */
 	private $handle = 'scroll-timeline-polyfill';
 
-	/** @var string Pinned upstream polyfill version (vendored + patched copy). */
-	private $version = '1.1.0';
+	/**
+	 * @var string Pinned upstream polyfill version, suffixed with the vendored
+	 *             patch level — consumers share this handle, so the suffix is
+	 *             what distinguishes two patch generations of the same upstream.
+	 */
+	private $version = '1.1.0-arts.2';
 
 	/**
 	 * Register the loader script (register-only — consumers pull it in).
@@ -24,6 +28,11 @@ class Frontend extends BaseManager {
 	 * API — no custom printers). If another plugin registered the same
 	 * handle first, `wp_register_script` no-ops and the shared handle
 	 * wins; version alignment is the interop expectation.
+	 *
+	 * Consumers that drive timelines from JS await the loader's
+	 * `window.__artsScrollTimelinePolyfillReady` promise, which settles
+	 * 'native' | 'polyfilled' | 'unavailable' — depend on this handle so
+	 * the loader is ordered first.
 	 *
 	 * @return void
 	 */

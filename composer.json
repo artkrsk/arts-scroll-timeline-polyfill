@@ -10,13 +10,6 @@
       "options": {
         "symlink": true
       }
-    },
-    {
-      "type": "path",
-      "url": "../ArtsUtilities",
-      "options": {
-        "symlink": true
-      }
     }
   ],
   "autoload": {
@@ -32,8 +25,7 @@
   ],
   "require": {
     "php": ">=8.0",
-    "arts/base": "@dev",
-    "arts/utilities": "@dev"
+    "arts/base": "@dev"
   },
   "require-dev": {
     "captainhook/captainhook": "^5.27",
