@@ -17,7 +17,7 @@ class Frontend extends BaseManager {
 	 *             patch level — consumers share this handle, so the suffix is
 	 *             what distinguishes two patch generations of the same upstream.
 	 */
-	private $version = '1.1.0-arts.2';
+	private $version = '1.1.0-arts.3';
 
 	/**
 	 * Register the loader script (register-only — consumers pull it in).
