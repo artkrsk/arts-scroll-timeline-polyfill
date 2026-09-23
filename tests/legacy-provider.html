@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Legacy provider collision</title>
+  <script>
+    // A new provider registers first. An older provider subsequently assigns
+    // its own URL to the same global in the shared handle's before payload.
+    if (!Object.prototype.hasOwnProperty.call(window, '__artsScrollTimelinePolyfillSrc')) {
+      Object.defineProperty(window, '__artsScrollTimelinePolyfillSrc', {
+        get: function () { return '../src/php/libraries/scroll-timeline/scroll-timeline.js'; },
+        set: function () {},
+        configurable: false
+      });
+    }
+    window.__artsScrollTimelinePolyfillSrc = '../legacy-missing.js';
+  </script>
+  <script defer src="../src/php/libraries/scroll-timeline/loader.js"></script>
+</head>
+<body><p>Legacy provider collision fixture</p></body>
+</html>

@@ -56,7 +56,11 @@ $first->register();
 
 assert( $scripts['scroll-timeline-polyfill']['version'] === $loader );
 assert( count( $inline ) === 1 );
-$bundle_url = json_decode( trim( substr( $inline[0]['code'], strpos( $inline[0]['code'], '=' ) + 1 ), " ;" ), true, 512, JSON_THROW_ON_ERROR );
+$bundle_code = $inline[0]['code'];
+assert( str_contains( $bundle_code, 'Object.defineProperty(window, "__artsScrollTimelinePolyfillSrc"' ) );
+assert( str_contains( $bundle_code, 'set: function () {}' ) );
+preg_match( '/return (".*?");/', $bundle_code, $matches );
+$bundle_url = json_decode( $matches[1], true, 512, JSON_THROW_ON_ERROR );
 assert( $bundle_url === 'https://example.test/first/libraries/scroll-timeline/scroll-timeline.js?ver=' . $bundle );
 
 $second = new \Arts\ScrollTimelinePolyfill\Managers\Frontend(

@@ -60,7 +60,10 @@ class Frontend extends BaseManager {
 		if ( is_string( $src ) ) {
 			wp_add_inline_script(
 				self::HANDLE,
-				'window.__artsScrollTimelinePolyfillSrc = ' . $src . ';',
+				'if (!Object.prototype.hasOwnProperty.call(window, "__artsScrollTimelinePolyfillSrc")) {' .
+				'Object.defineProperty(window, "__artsScrollTimelinePolyfillSrc", {' .
+				'get: function () { return ' . $src . '; }, set: function () {}, configurable: false' .
+				'}); }',
 				'before'
 			);
 		}
