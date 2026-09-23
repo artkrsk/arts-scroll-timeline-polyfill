@@ -1,0 +1,34 @@
+{
+  "name": "@arts/scroll-timeline-polyfill",
+  "version": "1.0.2",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "concurrently -k \"pnpm dev:lib\" \"pnpm dev:fixture\"",
+    "dev:lib": "vite build --mode development --watch",
+    "dev:fixture": "vite --host 127.0.0.1 --port 8844",
+    "build": "vite build --mode production",
+    "format": "biome format --write src/js/arts vite.config.ts playwright.config.ts scripts tests biome.json",
+    "format:check": "biome format src/js/arts vite.config.ts playwright.config.ts scripts tests biome.json",
+    "lint": "biome lint src/js/arts tests vite.config.ts playwright.config.ts && biome lint src/js/upstream --only=correctness/noUndeclaredVariables",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run tests/unit",
+    "test:browser": "playwright test",
+    "check:generated": "node scripts/check-generated.mjs",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.12",
+    "@playwright/test": "1.62.1",
+    "@types/node": "26.1.1",
+    "concurrently": "9.2.1",
+    "terser": "5.44.1",
+    "typescript": "7.0.2",
+    "vite": "8.0.10",
+    "vitest": "5.0.0"
+  }
+}

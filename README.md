@@ -1,79 +1,71 @@
 # arts/scroll-timeline-polyfill
 
-Registers the [flackr/scroll-timeline](https://github.com/flackr/scroll-timeline) polyfill as a self-gating WordPress script, so CSS scroll-driven animations work in browsers that don't ship them yet (Firefox, at the time of writing).
+Registers a self-gating WordPress script for the
+[flackr scroll-timeline polyfill](https://github.com/flackr/scroll-timeline).
+Browsers with native scroll-driven animations load only the small loader;
+other browsers fetch the committed polyfill asset. WordPress installations do
+not need Node or a build step.
 
-Browsers with native support download a ~600-byte loader and nothing else. Everyone else gets the polyfill fetched on demand.
+## Consumer contract
 
-## Usage
-
-Boot the plugin from your own plugin's bootstrap:
-
-```php
-\Arts\ScrollTimelinePolyfill\Plugin::instance();
-```
-
-If your plugin prefixes its vendor tree (Strauss and friends), call the prefixed class — the package resolves its own asset URLs from wherever it ends up.
-
-Then depend on the registered handle — that's what orders the loader ahead of your code:
-
-```php
-wp_register_script( 'my-effects', $url, array( 'scroll-timeline-polyfill' ), $ver, true );
-```
-
-The handle is shared: if two plugins register it, the first wins. Ship the same package version across your plugins so they agree on the patch level.
-
-### Driving timelines from JavaScript
-
-The loader appends the polyfill asynchronously, so `ViewTimeline` is not there on your first tick. Await the loader's promise, which never rejects:
+Boot `\Arts\ScrollTimelinePolyfill\Plugin::instance()` (or its prefixed class
+in a bundled plugin), then depend on or enqueue the shared
+`scroll-timeline-polyfill` script handle. The loader exposes a promise that
+always resolves to `native`, `polyfilled`, or `unavailable`:
 
 ```js
 const state = await window.__artsScrollTimelinePolyfillReady
-// 'native'      — the browser ships scroll-driven animations; nothing was loaded
-// 'polyfilled'  — the polyfill is installed; window.ViewTimeline is usable
-// 'unavailable' — no timelines: the fetch failed, or the polyfill aborted its
-//                 own init. Fall back; never commit to a layout that needs a
-//                 timeline to be usable.
+if (state === 'polyfilled') {
+  // window.ViewTimeline is ready.
+}
 ```
 
-### Opting a stylesheet out
+The first package to register the handle supplies both the loader and its
+bundle URL. Products shipping this dependency together should update to the
+same release. To keep the polyfill from rewriting a stylesheet, add its
+WordPress style handle to the `arts/scroll_timeline_polyfill/skipped_styles`
+filter. The package marks that sheet's `<link>` with `data-aphrodite`.
 
-The polyfill's CSS layer refetches and re-serializes stylesheets containing timeline syntax through its upstream parser. If you drive your animations from JS, or a sheet trips the parser, opt it out by handle:
+## Development
 
-```php
-add_filter(
-	'arts/scroll_timeline_polyfill/skipped_styles',
-	fn( $handles ) => array_merge( $handles, array( 'my-handle' ) )
-);
-```
-
-This tags the `<link>` with `data-aphrodite`, the polyfill's own skip vocabulary.
-
-## The vendored copy
-
-`src/php/libraries/scroll-timeline/scroll-timeline.js` is upstream 1.1.0, built and then patched. Upstream is effectively frozen, so the deviations live here rather than as a fork. They're listed in the file's banner; in short:
-
-1. **Per-stylesheet transpile errors are non-fatal.** Upstream aborts the entire init when one sheet throws, leaving `ViewTimeline` undefined and every animation dead. Elementor's own inline CSS does exactly this ("Empty selector" out of the parser).
-2. **`<link data-aphrodite>` opts a sheet out.** Upstream honors the attribute on inline `<style>` only.
-3. **The whole body is wrapped in a native-support guard**, testing the named timeline syntax alongside the anonymous functions — a browser implementing only part of the feature must not be misread as fully native.
-4. **Source measurement bails on detached sources.** Upstream throws when an AJAX page swap detaches a timeline source between observer registration and callback.
-5. **Zero-length ranges remain finite.** A subject exactly as tall as its scrollport has a zero-length contain range; converting its percentage to animation time must not divide by zero.
-6. **Skipped hostile stylesheets stay quiet.** Elementor inline CSS can trip the upstream parser; those sheets cannot abort initialization or flood the console.
-7. **Unrelated stylesheets remain untouched.** Sheets without timeline syntax are not replaced with blobs, avoiding a stylesheet-detachment flash during AJAX navigation.
-8. **CSS scroll animations bind reliably.** Scroll-bound `auto` and omitted durations get a finite `1s` bootstrap, including longhands and animation lists. Explicit durations and fill modes are preserved. CSS list parsing respects functions, strings and escapes. View timeline insets resolve custom properties against the subject, including nested fallbacks; inherited variable changes and geometry updates refresh their resolved values.
-9. **Stylesheet replacement updates existing bindings.** Inline style text and character-data changes replace that sheet's registrations in DOM order. Existing animation proxies receive updated timelines, ranges and insets without duplicate wrappers. Removed sheets and declarations release old bindings; the observer ignores the polyfill's emitted text.
-
-The current asset cache version is `1.1.0-arts.4`. The readable Arts patch block inside the shipped bundle is intentional: this package has no upstream rebuild dependency. Keep the native-support guards in the loader and bundle intact when updating it.
-
-### Browser regression fixture
-
-Serve this package root over HTTP and open `tests/browser-parity.html` in Firefox and a browser with native scroll timeline support. For example:
+Use Node 24 or newer and pnpm 12.5.1:
 
 ```sh
-python3 -m http.server 8844 --bind 127.0.0.1
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-The fixture loads the actual shipped bundle and reports results in the page and `window.__artsParityFixture`. It covers longhand/shorthand/omitted durations, animation lists and fill modes, inherited inset variable changes, nested fallbacks, repeated style replacement with unchanged animation names, character-data updates, stylesheet order/removal, and binding restoration. Chrome also exercises the bundle's native guard.
+`dev` runs a Vite fixture server at `http://127.0.0.1:8844/tests/browser-parity.html`
+and `dev:lib` watch mode. The watch build copies the bundle and its source map
+into `src/php/libraries/scroll-timeline/`, so path-repository Composer
+consumers see each rebuild. `pnpm build` produces the committed, minified
+delivery asset and removes the development map; production JavaScript has no
+source-map reference. The first-party `loader.js` remains at its existing path.
+
+Run checks and regenerate the production asset before committing:
+
+```sh
+pnpm check
+pnpm build
+pnpm test:browser
+pnpm check:generated
+composer install --no-interaction
+composer check
+```
+
+Install Playwright's Firefox and Chromium browsers if needed with
+`pnpm exec playwright install chromium firefox`. `check:generated` builds
+twice, compares the bytes, and fails when the committed bundle differs from
+source. CI performs the same checks from locked installs. The PHP loader uses
+each delivered file's `filemtime` as its cache key, so rebuilding an asset
+needs no manual version-string edit.
+
+The browser fixture runs the actual delivered bundle and reports results in
+`window.__artsParityFixture`. It covers Firefox's polyfilled CSS path and
+Chromium's native bypass. See [UPSTREAM.md](UPSTREAM.md) for the exact source
+baseline, patch inventory, and rebase procedure.
 
 ## License
 
-GPL-3.0-or-later. The vendored polyfill is Apache-2.0 (© Google LLC and contributors); its license travels with it in `src/php/libraries/scroll-timeline/LICENSE`.
+This package is GPL-3.0-or-later. The vendored polyfill is Apache-2.0,
+copyright Google LLC and contributors; its license ships with the JavaScript.

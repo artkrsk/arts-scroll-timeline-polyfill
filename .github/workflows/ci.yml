@@ -1,0 +1,40 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ArtsScrollTimelinePolyfill
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ArtsScrollTimelinePolyfill
+      - uses: actions/checkout@v4
+        with:
+          repository: artkrsk/arts-base
+          ref: 6749b9df1da013612bf1e97d99f3bcec8aa1526a
+          path: ArtsBase
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.5.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: ArtsScrollTimelinePolyfill/pnpm-lock.yaml
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+      - run: pnpm install --frozen-lockfile
+      - run: composer install --no-interaction --no-scripts --prefer-dist
+      - run: pnpm check
+      - run: composer check
+      - run: pnpm exec playwright install --with-deps chromium firefox
+      - run: pnpm check:generated
+      - run: pnpm test:browser

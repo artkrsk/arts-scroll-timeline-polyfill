@@ -9,15 +9,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 use Arts\Base\Managers\BaseManager;
 
 class Frontend extends BaseManager {
-	/** @var string Consumer-facing handle — depend on it or enqueue it directly. */
-	private $handle = 'scroll-timeline-polyfill';
-
-	/**
-	 * @var string Pinned upstream polyfill version, suffixed with the vendored
-	 *             patch level — consumers share this handle, so the suffix is
-	 *             what distinguishes two patch generations of the same upstream.
-	 */
-	private $version = '1.1.0-arts.4';
+	/** Consumer-facing handle — depend on it or enqueue it directly. */
+	private const HANDLE = 'scroll-timeline-polyfill';
 
 	/**
 	 * Register the loader script (register-only — consumers pull it in).
@@ -26,8 +19,7 @@ class Frontend extends BaseManager {
 	 * real polyfill, so native browsers fetch ~200 bytes and stop. The
 	 * polyfill URL reaches it via an inline `before` script (standard
 	 * API — no custom printers). If another plugin registered the same
-	 * handle first, `wp_register_script` no-ops and the shared handle
-	 * wins; version alignment is the interop expectation.
+	 * handle first, its loader and matching bundle URL both win.
 	 *
 	 * Consumers that drive timelines from JS await the loader's
 	 * `window.__artsScrollTimelinePolyfillReady` promise, which settles
@@ -37,28 +29,52 @@ class Frontend extends BaseManager {
 	 * @return void
 	 */
 	public function register(): void {
-		$base = untrailingslashit( $this->plugin_dir_url ) . '/libraries/scroll-timeline';
+		$base       = untrailingslashit( $this->plugin_dir_url ) . '/libraries/scroll-timeline';
+		$loader_url = esc_url( $base . '/loader.js' );
+		if ( '' === $loader_url ) {
+			return;
+		}
 
-		wp_register_script(
-			$this->handle,
-			esc_url( $base . '/loader.js' ),
+		$registered = wp_register_script(
+			self::HANDLE,
+			$loader_url,
 			array(),
-			$this->version,
+			$this->asset_version( 'loader.js' ),
 			array(
 				'in_footer' => true,
 				'strategy'  => 'defer',
 			)
 		);
 
-		$src = wp_json_encode( esc_url( $base . '/scroll-timeline.js?ver=' . $this->version ) );
+		if ( ! $registered ) {
+			return;
+		}
+
+		$bundle_url     = $base . '/scroll-timeline.js';
+		$bundle_version = $this->asset_version( 'scroll-timeline.js' );
+		if ( null !== $bundle_version ) {
+			$bundle_url = add_query_arg( 'ver', $bundle_version, $bundle_url );
+		}
+		$src = wp_json_encode( esc_url( $bundle_url ) );
 
 		if ( is_string( $src ) ) {
 			wp_add_inline_script(
-				$this->handle,
+				self::HANDLE,
 				'window.__artsScrollTimelinePolyfillSrc = ' . $src . ';',
 				'before'
 			);
 		}
+	}
+
+	/** Use the delivered file's modification time as its cache key. */
+	private function asset_version( string $file ): ?string {
+		$path = trailingslashit( $this->plugin_dir_path ) . 'libraries/scroll-timeline/' . $file;
+		if ( ! is_file( $path ) ) {
+			return null;
+		}
+
+		$mtime = filemtime( $path );
+		return false === $mtime ? null : (string) $mtime;
 	}
 
 	/**
@@ -86,7 +102,7 @@ class Frontend extends BaseManager {
 
 		$processor = new \WP_HTML_Tag_Processor( $tag );
 
-		if ( $processor->next_tag( 'link' ) ) {
+		if ( $processor->next_tag( array( 'tag_name' => 'link' ) ) ) {
 			$processor->set_attribute( 'data-aphrodite', true );
 			return $processor->get_updated_html();
 		}

@@ -4,6 +4,7 @@
   "type": "library",
   "license": "GPL-3.0-or-later",
   "minimum-stability": "dev",
+  "prefer-stable": true,
   "repositories": [
     {
       "type": "path",
@@ -38,6 +39,9 @@
     "wp-coding-standards/wpcs": "^3.0"
   },
   "config": {
+    "platform": {
+      "php": "8.0.0"
+    },
     "allow-plugins": {
       "dealerdirect/phpcodesniffer-composer-installer": true,
       "ergebnis/composer-normalize": true
@@ -54,13 +58,15 @@
     ],
     "check": [
       "@phpcs",
-      "@phpstan"
+      "@phpstan",
+      "@test"
     ],
     "fix": "@phpcbf",
     "normalize": "composer-normalize",
     "phpcbf": "phpcbf --standard=phpcs.xml",
     "phpcs": "phpcs --standard=phpcs.xml",
     "phpstan": "phpstan analyse --memory-limit=1G",
-    "phpstan:baseline": "phpstan analyse --memory-limit=1G --generate-baseline"
+    "phpstan:baseline": "phpstan analyse --memory-limit=1G --generate-baseline",
+    "test": "php -d zend.assertions=1 -d assert.exception=1 tests/php/frontend-registration.php"
   }
 }

@@ -20,6 +20,7 @@ Thumbs.db
 
 # Build output
 /dist
+/src/php/libraries/scroll-timeline/*.map
 
 # Dependencies
 /node_modules
@@ -32,6 +33,8 @@ package-lock.json
 
 # Testing
 /coverage
+/playwright-report
+/test-results
 /.nyc_output
 /cypress/videos/
 /cypress/screenshots/
@@ -70,10 +73,8 @@ next-env.d.ts
 *.tmp
 *.temp
 
-# WordPress specific
-# NOTE: libraries/ IS committed in this package (deviation from sibling
-# packages): scroll-timeline.js is a hand-patched vendored copy with no
-# build step to regenerate it, and loader.js is first-party source.
+# WordPress delivery assets under src/php/libraries/ are committed. The
+# production bundle is regenerated from src/js; development maps are ignored.
 
 # Project specific
 /drafts
