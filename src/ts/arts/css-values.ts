@@ -1,5 +1,22 @@
+import type { PolyfillInset, PolyfillNumericValue } from '../public/index.js'
+import { required } from '../platform/assertions.js'
+export interface ParsedInset {
+  start: PolyfillNumericValue | 'auto'
+  end: PolyfillNumericValue | 'auto'
+}
+export interface InsetState {
+  subject: Element | null
+  artsInset?: PolyfillInset
+  artsResolvedInset?: PolyfillInset
+  inset: ParsedInset | null
+}
+interface InsetCache {
+  style: CSSStyleDeclaration
+  values: Map<string, string>
+}
+import { numeric, numericType } from '../platform/numeric-api.js'
 /* Arts CSS value compatibility, extracted from the shipped 1.1.0-arts.4 bundle. */
-export function artsSplitCSS(value, delimiter = ',') {
+export function artsSplitCSS(value: string, delimiter = ','): string[] {
   const result = []
   let start = 0,
     depth = 0,
@@ -7,7 +24,7 @@ export function artsSplitCSS(value, delimiter = ',') {
     escaped = false,
     comment = false
   for (let index = 0; index < value.length; index++) {
-    const char = value[index],
+    const char = value.charAt(index),
       next = value[index + 1]
     if (comment) {
       if (char === '*' && next === '/') {
@@ -49,7 +66,11 @@ export function artsSplitCSS(value, delimiter = ',') {
   if (part || delimiter !== ' ') result.push(part)
   return result
 }
-export function artsResolveVars(value, style, seen = new Set()) {
+export function artsResolveVars(
+  value: string,
+  style: Pick<CSSStyleDeclaration, 'getPropertyValue'>,
+  seen = new Set<string>(),
+): string | null {
   if (seen.size > 64) return null
   let output = '',
     cursor = 0
@@ -61,7 +82,7 @@ export function artsResolveVars(value, style, seen = new Set()) {
       quote = '',
       escaped = false
     for (; end < value.length && depth; end++) {
-      const char = value[end]
+      const char = value.charAt(end)
       if (escaped) {
         escaped = false
         continue
@@ -84,8 +105,8 @@ export function artsResolveVars(value, style, seen = new Set()) {
     if (depth) return null
     const parts = artsSplitCSS(value.slice(pattern.lastIndex, end - 1))
     const name = parts.shift()
-    if (!/^--/.test(name)) return null
-    let replacement = null
+    if (!name || !/^--/.test(name)) return null
+    let replacement: string | null = null
     if (!seen.has(name)) {
       const custom = style.getPropertyValue(name).trim()
       if (custom) replacement = artsResolveVars(custom, style, new Set([...seen, name]))
@@ -100,26 +121,30 @@ export function artsResolveVars(value, style, seen = new Set()) {
   }
   return output + value.slice(cursor)
 }
-export function artsParseInset(value) {
-  const parts =
+export function artsParseInset(value: PolyfillInset): ParsedInset {
+  const input =
     typeof value === 'string'
       ? artsSplitCSS(value, ' ').map((part) =>
-          part === 'auto' ? part : CSSNumericValue.parse(part),
+          part === 'auto' ? part : numeric.CSSNumericValue.parse(part),
         )
-      : Array.isArray(value)
-        ? value
-        : [value]
-  if (!parts.length || parts.length > 2) throw TypeError('Invalid inset')
-  for (const part of parts) {
-    if (part === 'auto') continue
-    const type = part.type()
-    if (type.length !== 1 && type.percent !== 1) throw TypeError('Invalid inset')
-  }
-  return { start: parts[0], end: parts[1] ?? parts[0] }
+      : value
+  if (!input.length || input.length > 2) throw new TypeError('Invalid inset')
+  const parts = input.map((part): PolyfillNumericValue | 'auto' => {
+    if (part === 'auto') return part
+    if (part instanceof numeric.CSSKeywordValue) {
+      if (part.value === 'auto') return 'auto'
+      throw new TypeError('Invalid inset keyword')
+    }
+    const type = numericType(part)
+    if (type.length !== 1 && type.percent !== 1) throw new TypeError('Invalid inset')
+    return part
+  })
+  const start = required(parts[0])
+  return { start, end: parts[1] ?? start }
 }
-let artsInsetCache = new WeakMap(),
+let artsInsetCache = new WeakMap<Element, InsetCache>(),
   artsInsetCachePending = false
-export function artsResolvedInset(subject, raw) {
+export function artsResolvedInset(subject: Element, raw: string): string {
   let cache = artsInsetCache.get(subject)
   if (!cache) {
     cache = { style: getComputedStyle(subject), values: new Map() }
@@ -129,13 +154,13 @@ export function artsResolvedInset(subject, raw) {
   if (!artsInsetCachePending) {
     artsInsetCachePending = true
     requestAnimationFrame(() => {
-      artsInsetCache = new WeakMap()
+      artsInsetCache = new WeakMap<Element, InsetCache>()
       artsInsetCachePending = false
     })
   }
-  return cache.values.get(raw)
+  return required(cache.values.get(raw))
 }
-export function artsRefreshInset(state, style) {
+export function artsRefreshInset(state: InsetState, style?: CSSStyleDeclaration): boolean {
   const raw = state.artsInset
   if (raw == null) return false
   const hasVars = typeof raw === 'string' && raw.includes('var(')
@@ -151,6 +176,6 @@ export function artsRefreshInset(state, style) {
   return true
 }
 
-export function artsClearInsetCache() {
-  artsInsetCache = new WeakMap()
+export function artsClearInsetCache(): void {
+  artsInsetCache = new WeakMap<Element, InsetCache>()
 }

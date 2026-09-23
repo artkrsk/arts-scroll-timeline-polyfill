@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["tests/fixtures/**/*.ts", "tests/browser/global.d.ts"]
+}

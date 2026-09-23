@@ -1,5 +1,4 @@
-export {}
-
+import type {} from '../../src/ts/public/globals.js'
 declare global {
   interface Window {
     __artsParityFixture?: {
@@ -9,6 +8,5 @@ declare global {
       failed: string[]
       errors: string[]
     }
-    __artsScrollTimelinePolyfillReady?: Promise<'native' | 'polyfilled' | 'unavailable'>
   }
 }

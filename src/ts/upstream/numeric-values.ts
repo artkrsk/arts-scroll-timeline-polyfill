@@ -1,102 +1,186 @@
+import type { PolyfillNumericValue, PolyfillUnitValue, PolyfillMathSum } from '../public/index.js'
+import type { CSSToken } from './tokenizer.js'
+import { required } from '../platform/assertions.js'
+import { numeric } from '../platform/numeric-api.js'
 import {
   CommaToken,
   DelimToken,
   DimensionToken,
-  FunctionToken, IdentToken,
+  FunctionToken,
+  IdentToken,
   LeftCurlyBracketToken,
   LeftParenthesisToken,
   LeftSquareBracketToken,
   NumberToken,
-  PercentageToken, RightCurlyBracketToken,
-  RightParenthesisToken, RightSquareBracketToken,
+  PercentageToken,
+  RightCurlyBracketToken,
+  RightParenthesisToken,
+  RightSquareBracketToken,
   Token,
   tokenizeString,
-  WhitespaceToken
-} from './tokenizer';
-import {simplifyCalculation} from './simplify-calculation';
+  WhitespaceToken,
+} from './tokenizer.js'
+import { simplifyCalculation } from './simplify-calculation.js'
 
-/**
- * @typedef {{[string]: integer}} UnitMap
- * @typedef {[number, UnitMap]} SumValueItem
- * @typedef {SumValueItem[]} SumValue
- * @typedef {null} Failure
- * @typedef {{[string]: integer} & {percentHint: string | undefined}} Type
- * @typedef {{type: 'ADDITION'}|{type: 'MULTIPLICATION'}|{type: 'NEGATE'}|{type: 'INVERT'}} ASTNode
- */
+type UnitMap = Record<string, number>
+type SumValueItem = [number, UnitMap]
+type SumValue = SumValueItem[]
+interface UnitGroup {
+  units: Set<string>
+  compatible?: boolean
+  canonicalUnit?: string
+  ratios?: Record<string, number>
+}
+interface CompatibleUnitGroup extends UnitGroup {
+  compatible: true
+  canonicalUnit: string
+  ratios: Record<string, number>
+}
+type OpeningToken = LeftCurlyBracketToken | LeftParenthesisToken | LeftSquareBracketToken
+type ComponentValue = CSSToken | CSSFunction | CSSSimpleBlock
+type ASTLeaf =
+  | NumberToken
+  | PercentageToken
+  | DimensionToken
+  | IdentToken
+  | CSSFunction
+  | CSSSimpleBlock
+type NAryNode = { type: 'ADDITION' | 'MULTIPLICATION'; values: ASTNode[] }
+type ASTNode = ASTLeaf | NAryNode | { type: 'NEGATE' | 'INVERT'; value: ASTNode }
+function isNAryNode(node: ASTNode): node is NAryNode {
+  return 'type' in node && (node.type === 'ADDITION' || node.type === 'MULTIPLICATION')
+}
 
-const failure = null;
-const baseTypes = ["percent", "length", "angle", "time", "frequency", "resolution", "flex"];
+const failure = null
+const baseTypes = [
+  'percent',
+  'length',
+  'angle',
+  'time',
+  'frequency',
+  'resolution',
+  'flex',
+] as const satisfies readonly CSSNumericBaseType[]
 
 const unitGroups = {
   // https://www.w3.org/TR/css-values-4/#font-relative-lengths
   fontRelativeLengths: {
-    units: new Set(["em", "rem", "ex", "rex", "cap", "rcap", "ch", "rch", "ic", "ric", "lh", "rlh"])
+    units: new Set([
+      'em',
+      'rem',
+      'ex',
+      'rex',
+      'cap',
+      'rcap',
+      'ch',
+      'rch',
+      'ic',
+      'ric',
+      'lh',
+      'rlh',
+    ]),
   },
   // https://www.w3.org/TR/css-values-4/#viewport-relative-lengths
   viewportRelativeLengths: {
-    units: new Set(
-      ["vw", "lvw", "svw", "dvw", "vh", "lvh", "svh", "dvh", "vi", "lvi", "svi", "dvi", "vb", "lvb", "svb", "dvb",
-        "vmin", "lvmin", "svmin", "dvmin", "vmax", "lvmax", "svmax", "dvmax"])
+    units: new Set([
+      'vw',
+      'lvw',
+      'svw',
+      'dvw',
+      'vh',
+      'lvh',
+      'svh',
+      'dvh',
+      'vi',
+      'lvi',
+      'svi',
+      'dvi',
+      'vb',
+      'lvb',
+      'svb',
+      'dvb',
+      'vmin',
+      'lvmin',
+      'svmin',
+      'dvmin',
+      'vmax',
+      'lvmax',
+      'svmax',
+      'dvmax',
+    ]),
   },
   // https://www.w3.org/TR/css-values-4/#absolute-lengths
   absoluteLengths: {
-    units: new Set(["cm", "mm", "Q", "in", "pt", "pc", "px"]),
-    compatible: true,
-    canonicalUnit: "px",
+    units: new Set(['cm', 'mm', 'q', 'in', 'pt', 'pc', 'px']),
+    compatible: true as const,
+    canonicalUnit: 'px',
     ratios: {
-      "cm": 96 / 2.54, "mm": (96 / 2.54) / 10, "Q": (96 / 2.54) / 40, "in": 96, "pc": 96 / 6, "pt": 96 / 72, "px": 1
-    }
+      cm: 96 / 2.54,
+      mm: 96 / 2.54 / 10,
+      q: 96 / 2.54 / 40,
+      in: 96,
+      pc: 96 / 6,
+      pt: 96 / 72,
+      px: 1,
+    },
   },
   // https://www.w3.org/TR/css-values-4/#angles
   angle: {
-    units: new Set(["deg", "grad", "rad", "turn"]),
-    compatible: true,
-    canonicalUnit: "deg",
+    units: new Set(['deg', 'grad', 'rad', 'turn']),
+    compatible: true as const,
+    canonicalUnit: 'deg',
     ratios: {
-      "deg": 1, "grad": 360 / 400, "rad": 180 / Math.PI, "turn": 360
-    }
+      deg: 1,
+      grad: 360 / 400,
+      rad: 180 / Math.PI,
+      turn: 360,
+    },
   },
   // https://www.w3.org/TR/css-values-4/#time
   time: {
-    units: new Set(["s", "ms"]),
-    compatible: true,
-    canonicalUnit: "s",
+    units: new Set(['s', 'ms']),
+    compatible: true as const,
+    canonicalUnit: 's',
     ratios: {
-      "s": 1, "ms": 1 / 1000
-    }
+      s: 1,
+      ms: 1 / 1000,
+    },
   },
   // https://www.w3.org/TR/css-values-4/#frequency
   frequency: {
-    units: new Set(["hz", "khz"]),
-    compatible: true,
-    canonicalUnit: "hz",
+    units: new Set(['hz', 'khz']),
+    compatible: true as const,
+    canonicalUnit: 'hz',
     ratios: {
-      "hz": 1, "khz": 1000
-    }
+      hz: 1,
+      khz: 1000,
+    },
   },
   // https://www.w3.org/TR/css-values-4/#resolution
   resolution: {
-    units: new Set(["dpi", "dpcm", "dppx"]),
-    compatible: true,
-    canonicalUnit: "dppx",
+    units: new Set(['dpi', 'dpcm', 'dppx']),
+    compatible: true as const,
+    canonicalUnit: 'dppx',
     ratios: {
-      "dpi": 1 / 96, "dpcm": 2.54 / 96, "dppx": 1
-    }
-  }
-};
+      dpi: 1 / 96,
+      dpcm: 2.54 / 96,
+      dppx: 1,
+    },
+  },
+} satisfies Record<string, UnitGroup>
 
-const unitToCompatibleUnitsMap = new Map();
+const unitToCompatibleUnitsMap = new Map<string, CompatibleUnitGroup>()
 for (const group of Object.values(unitGroups)) {
-  if (!group.compatible) {
-    continue;
+  if (!('compatible' in group) || !group.compatible) {
+    continue
   }
   for (const unit of group.units) {
-    unitToCompatibleUnitsMap.set(unit, group);
+    unitToCompatibleUnitsMap.set(unit, group)
   }
 }
 
-export function getSetOfCompatibleUnits(unit) {
-  return unitToCompatibleUnitsMap.get(unit);
+export function getSetOfCompatibleUnits(unit: string): CompatibleUnitGroup | undefined {
+  return unitToCompatibleUnitsMap.get(unit.toLowerCase())
 }
 
 /**
@@ -107,21 +191,21 @@ export function getSetOfCompatibleUnits(unit) {
  * @param {UnitMap} units2 map of units (strings) to powers (integers)
  * @return {UnitMap} map of units (strings) to powers (integers)
  */
-function productOfTwoUnitMaps(units1, units2) {
+function productOfTwoUnitMaps(units1: UnitMap, units2: UnitMap): UnitMap {
   // 1. Let result be a copy of units1.
-  const result = {...units1};
+  const result = { ...units1 }
   // 2. For each unit → power in units2:
-  for (const unit of Object.keys(units2)) {
+  for (const [unit, power] of Object.entries(units2)) {
     if (result[unit]) {
       // 1. If result[unit] exists, increment result[unit] by power.
-      result[unit] += units2[unit];
+      result[unit] = (result[unit] ?? 0) + power
     } else {
       // 2. Otherwise, set result[unit] to power.
-      result[unit] = units2[unit];
+      result[unit] = power
     }
   }
   // 3. Return result.
-  return result;
+  return result
 }
 
 /**
@@ -131,26 +215,30 @@ function productOfTwoUnitMaps(units1, units2) {
  * @param {string} unit
  * @return {Type|Failure}
  */
-export function createAType(unit) {
-  if (unit === "number") {
-    return {};
-  } else if (unit === "percent") {
-    return {"percent": 1};
-  } else if (unitGroups.absoluteLengths.units.has(unit) || unitGroups.fontRelativeLengths.units.has(unit) ||
-    unitGroups.viewportRelativeLengths.units.has(unit)) {
-    return {"length": 1};
+export function createAType(unit: string): CSSNumericType | null {
+  unit = unit.toLowerCase()
+  if (unit === 'number') {
+    return {}
+  } else if (unit === 'percent') {
+    return { percent: 1 }
+  } else if (
+    unitGroups.absoluteLengths.units.has(unit) ||
+    unitGroups.fontRelativeLengths.units.has(unit) ||
+    unitGroups.viewportRelativeLengths.units.has(unit)
+  ) {
+    return { length: 1 }
   } else if (unitGroups.angle.units.has(unit)) {
-    return {"angle": 1};
+    return { angle: 1 }
   } else if (unitGroups.time.units.has(unit)) {
-    return {"time": 1};
+    return { time: 1 }
   } else if (unitGroups.frequency.units.has(unit)) {
-    return {"frequency": 1};
+    return { frequency: 1 }
   } else if (unitGroups.resolution.units.has(unit)) {
-    return {"resolution": 1};
-  } else if (unit === "fr") {
-    return {"flex": 1};
+    return { resolution: 1 }
+  } else if (unit === 'fr') {
+    return { flex: 1 }
   } else {
-    return failure;
+    return failure
   }
 }
 
@@ -164,63 +252,63 @@ export function createAType(unit) {
  * @param {CSSNumericValue} cssNumericValue
  * @return {SumValue} Abstract representation of a CSSNumericValue as a sum of numbers with (possibly complex) units
  */
-export function createSumValue(cssNumericValue) {
-  if (cssNumericValue instanceof CSSUnitValue) {
-    let {unit, value} = cssNumericValue;
+export function createSumValue(cssNumericValue: PolyfillNumericValue): SumValue | null {
+  if (cssNumericValue instanceof numeric.CSSUnitValue) {
+    let { unit, value } = cssNumericValue
     // Let unit be the value of this’s unit internal slot, and value be the value of this’s value internal slot.
     // If unit is a member of a set of compatible units, and is not the set’s canonical unit,
     // multiply value by the conversion ratio between unit and the canonical unit, and change unit to the canonical unit.
-    const compatibleUnits = getSetOfCompatibleUnits(cssNumericValue.unit);
+    const compatibleUnits = getSetOfCompatibleUnits(cssNumericValue.unit)
     if (compatibleUnits && unit !== compatibleUnits.canonicalUnit) {
-      value *= compatibleUnits.ratios[unit];
-      unit = compatibleUnits.canonicalUnit;
+      value *= required(compatibleUnits.ratios[unit])
+      unit = compatibleUnits.canonicalUnit
     }
 
-    if (unit === "number") {
+    if (unit === 'number') {
       // If unit is "number", return «(value, «[ ]»)».
-      return [[value, {}]];
+      return [[value, {}]]
     } else {
       // Otherwise, return «(value, «[unit → 1]»)».
-      return [[value, {[unit]: 1}]];
+      return [[value, { [unit]: 1 }]]
     }
-  } else if (cssNumericValue instanceof CSSMathInvert) {
-    if (!(cssNumericValue.value instanceof CSSUnitValue)) {
-      // Limit implementation to CSSMathInvert of CSSUnitValue
-      throw new Error("Not implemented");
+  } else if (cssNumericValue instanceof numeric.CSSMathInvert) {
+    if (!(cssNumericValue.value instanceof numeric.CSSUnitValue)) {
+      // Limit implementation to numeric.CSSMathInvert of numeric.CSSUnitValue
+      throw new Error('Not implemented')
     }
     // 1. Let values be the result of creating a sum value from this’s value internal slot.
-    const values = createSumValue(cssNumericValue.value);
+    const values = createSumValue(cssNumericValue.value)
     // 2. If values is failure, return failure.
     if (values === failure) {
-      return failure;
+      return failure
     }
     // 3. If the length of values is more than one, return failure.
     if (values.length > 1) {
-      return failure;
+      return failure
     }
     // 4. Invert (find the reciprocal of) the value of the item in values, and negate the value of each entry in its unit map.
-    const item = values[0];
-    const tempUnionMap = {};
+    const item = required(values[0])
+    const tempUnionMap: UnitMap = {}
     for (const [unit, power] of Object.entries(item[1])) {
-      tempUnionMap[unit] = -1 * power;
+      tempUnionMap[unit] = -1 * power
     }
-    values[0] = [1 / item[0], tempUnionMap];
+    values[0] = [1 / item[0], tempUnionMap]
 
     // 5. Return values.
-    return values;
-  } else if (cssNumericValue instanceof CSSMathProduct) {
+    return values
+  } else if (cssNumericValue instanceof numeric.CSSMathProduct) {
     // 1. Let values initially be the sum value «(1, «[ ]»)». (I.e. what you’d get from 1.)
 
-    let values = [[1, {}]];
+    let values: SumValue = [[1, {}]]
 
     // 2. For each item in this’s values internal slot:
     for (const item of cssNumericValue.values) {
       // 1. Let new values be the result of creating a sum value from item. Let temp initially be an empty list.
-      const newValues = createSumValue(item);
-      const temp = [];
+      const newValues = createSumValue(item)
+      const temp: SumValue = []
       // 2. If new values is failure, return failure.
       if (newValues === failure) {
-        return failure;
+        return failure
       }
       // 3. For each item1 in values:
       for (const item1 of values) {
@@ -229,19 +317,18 @@ export function createSumValue(cssNumericValue) {
           // 1. Let item be a tuple with its value set to the product of the values of item1 and item2, and its unit
           //    map set to the product of the unit maps of item1 and item2, with all entries with a zero value removed.
           // 2. Append item to temp.
-          temp.push([item1[0] * item2[0], productOfTwoUnitMaps(item1[1], item2[1])]);
+          temp.push([item1[0] * item2[0], productOfTwoUnitMaps(item1[1], item2[1])])
         }
       }
       // 4. Set values to temp.
-      values = temp;
+      values = temp
     }
     // Return values.
-    return values;
+    return values
   } else {
-    throw new Error("Not implemented");
+    throw new Error('Not implemented')
   }
 }
-
 
 /**
  * Implementation of `to(unit)` for CSSNumericValue from css-typed-om-1:
@@ -253,37 +340,36 @@ export function createSumValue(cssNumericValue) {
  * @param {string} unit
  * @return {CSSUnitValue}
  */
-export function to(cssNumericValue, unit) {
+export function to(cssNumericValue: PolyfillNumericValue, unit: string): PolyfillUnitValue {
   // Let type be the result of creating a type from unit. If type is failure, throw a SyntaxError.
-  const type = createAType(unit);
+  const type = createAType(unit)
   if (type === failure) {
-    throw new SyntaxError("The string did not match the expected pattern.");
+    throw new SyntaxError('The string did not match the expected pattern.')
   }
 
   // Let sum be the result of creating a sum value from this.
-  const sumValue = createSumValue(cssNumericValue);
+  const sumValue = createSumValue(cssNumericValue)
 
   // If sum is failure, throw a TypeError.
   if (!sumValue) {
-    throw new TypeError();
+    throw new TypeError()
   }
 
   // If sum has more than one item, throw a TypeError.
   if (sumValue.length > 1) {
-    throw new TypeError("Sum has more than one item");
+    throw new TypeError('Sum has more than one item')
   }
 
-  // Otherwise, let item be the result of creating a CSSUnitValue
+  // Otherwise, let item be the result of creating a numeric.CSSUnitValue
   // from the sole item in sum, then converting it to unit.
-  const item = convertCSSUnitValue(createCSSUnitValue(sumValue[0]), unit);
-
+  const item = convertCSSUnitValue(createCSSUnitValue(required(sumValue[0])), unit)
 
   // If item is failure, throw a TypeError.
   if (item === failure) {
-    throw new TypeError();
+    throw new TypeError()
   }
   // Return item.
-  return item;
+  return item
 }
 
 /**
@@ -293,27 +379,27 @@ export function to(cssNumericValue, unit) {
  * @param {SumValueItem} sumValueItem  a tuple of a value, and a unit map
  * @return {CSSUnitValue|Failure}
  */
-export function createCSSUnitValue(sumValueItem) {
-  const [value, unitMap] = sumValueItem;
-  // When asked to create a CSSUnitValue from a sum value item item, perform the following steps:
+export function createCSSUnitValue(sumValueItem: SumValueItem): PolyfillUnitValue | null {
+  const [value, unitMap] = sumValueItem
+  // When asked to create a numeric.CSSUnitValue from a sum value item item, perform the following steps:
   // If item has more than one entry in its unit map, return failure.
-  const entries = Object.entries(unitMap);
+  const entries = Object.entries(unitMap)
   if (entries.length > 1) {
-    return failure;
+    return failure
   }
-  // If item has no entries in its unit map, return a new CSSUnitValue whose unit internal slot is set to "number",
+  // If item has no entries in its unit map, return a new numeric.CSSUnitValue whose unit internal slot is set to "number",
   // and whose value internal slot is set to item’s value.
   if (entries.length === 0) {
-    return new CSSUnitValue(value, "number");
+    return new numeric.CSSUnitValue(value, 'number')
   }
   // Otherwise, item has a single entry in its unit map. If that entry’s value is anything other than 1, return failure.
-  const entry = entries[0];
+  const entry = required(entries[0])
   if (entry[1] !== 1) {
-    return failure;
+    return failure
   }
-  // Otherwise, return a new CSSUnitValue whose unit internal slot is set to that entry’s key, and whose value internal slot is set to item’s value.
+  // Otherwise, return a new numeric.CSSUnitValue whose unit internal slot is set to that entry’s key, and whose value internal slot is set to item’s value.
   else {
-    return new CSSUnitValue(value, entry[0]);
+    return new numeric.CSSUnitValue(value, entry[0])
   }
 }
 
@@ -325,19 +411,29 @@ export function createCSSUnitValue(sumValueItem) {
  * @param {string} unit
  * @return {CSSUnitValue|Failure}
  */
-export function convertCSSUnitValue(cssUnitValue, unit) {
+export function convertCSSUnitValue(
+  cssUnitValue: PolyfillUnitValue | null,
+  unit: string,
+): PolyfillUnitValue | null {
   // Let old unit be the value of this’s unit internal slot, and old value be the value of this’s value internal slot.
-  const oldUnit = cssUnitValue.unit;
-  const oldValue = cssUnitValue.value;
+  if (!cssUnitValue) return null
+  unit = unit.toLowerCase()
+  const oldUnit = cssUnitValue.unit
+  if (oldUnit === unit) return new numeric.CSSUnitValue(cssUnitValue.value, unit)
+  const oldValue = cssUnitValue.value
   // If old unit and unit are not compatible units, return failure.
-  const oldCompatibleUnitGroup = getSetOfCompatibleUnits(oldUnit);
-  const compatibleUnitGroup = getSetOfCompatibleUnits(unit);
+  const oldCompatibleUnitGroup = getSetOfCompatibleUnits(oldUnit)
+  const compatibleUnitGroup = getSetOfCompatibleUnits(unit)
   if (!compatibleUnitGroup || oldCompatibleUnitGroup !== compatibleUnitGroup) {
-    return failure;
+    return failure
   }
-  // Return a new CSSUnitValue whose unit internal slot is set to unit, and whose value internal slot is set to
+  // Return a new numeric.CSSUnitValue whose unit internal slot is set to unit, and whose value internal slot is set to
   // old value multiplied by the conversation ratio between old unit and unit.
-  return new CSSUnitValue(oldValue * compatibleUnitGroup.ratios[oldUnit] / compatibleUnitGroup.ratios[unit], unit);
+  return new numeric.CSSUnitValue(
+    (oldValue * required(compatibleUnitGroup.ratios[oldUnit])) /
+      required(compatibleUnitGroup.ratios[unit]),
+    unit,
+  )
 }
 
 /**
@@ -352,32 +448,34 @@ export function convertCSSUnitValue(cssUnitValue, unit) {
  * @param {string[]} units Not supported in this implementation
  * @return {CSSMathSum}
  */
-export function toSum(cssNumericValue, ...units) {
-  // The toSum(...units) method converts an existing CSSNumericValue this into a CSSMathSum of only CSSUnitValues
+export function toSum(cssNumericValue: PolyfillNumericValue, ...units: string[]): PolyfillMathSum {
+  // The toSum(...units) method converts an existing numeric.CSSNumericValue this into a numeric.CSSMathSum of only CSSUnitValues
   // with the specified units, if possible. (It’s like to(), but allows the result to have multiple units in it.)
   // If called without any units, it just simplifies this into a minimal sum of CSSUnitValues.
   // When called, it must perform the following steps:
   //
   // For each unit in units, if the result of creating a type from unit is failure, throw a SyntaxError.
   //
-  if (units && units.length) {
+  if (units?.length) {
     // Only unitless method calls are implemented in this polyfill
-    throw new Error("Not implemented");
+    throw new Error('Not implemented')
   }
 
   // Let sum be the result of creating a sum value from this. If sum is failure, throw a TypeError.
-  const sum = createSumValue(cssNumericValue);
+  const sum = createSumValue(cssNumericValue)
 
-  // Let values be the result of creating a CSSUnitValue for each item in sum. If any item of values is failure,
+  // Let values be the result of creating a numeric.CSSUnitValue for each item in sum. If any item of values is failure,
   // throw a TypeError.
-  const values = sum.map(item => createCSSUnitValue(item));
-  if (values.some(value => value === failure)) {
-    throw new TypeError("Type error");
+  const values = required(sum).map((value) =>
+    required(createCSSUnitValue(value), 'Invalid numeric sum'),
+  )
+  if (values.some((value) => value === failure)) {
+    throw new TypeError('Type error')
   }
 
   // If units is empty, sort values in code point order according to the unit internal slot of its items,
-  // then return a new CSSMathSum object whose values internal slot is set to values.
-  return new CSSMathSum(...values);
+  // then return a new numeric.CSSMathSum object whose values internal slot is set to values.
+  return new numeric.CSSMathSum(...values)
 }
 
 /**
@@ -387,16 +485,16 @@ export function toSum(cssNumericValue, ...units) {
  * @param {Type} type
  * @return {Type}
  */
-export function invertType(type) {
+export function invertType(type: CSSNumericType): CSSNumericType {
   // To invert a type type, perform the following steps:
   // Let result be a new type with an initially empty ordered map and an initially null percent hint
   // For each unit → exponent of type, set result[unit] to (-1 * exponent).
   // Return result.
-  const result = {};
+  const result: CSSNumericType = {}
   for (const baseType of baseTypes) {
-    result[baseType] = -1 * type[baseType];
+    if (type[baseType] !== undefined) result[baseType] = -1 * required(type[baseType])
   }
-  return result;
+  return result
 }
 
 /**
@@ -407,39 +505,39 @@ export function invertType(type) {
  * @param {Type} type2 a map of base types to integers and an associated percent hint
  * @return {Type|Failure}
  */
-export function multiplyTypes(type1, type2) {
+export function multiplyTypes(type1: CSSNumericType, type2: CSSNumericType): CSSNumericType | null {
   if (type1.percentHint && type2.percentHint && type1.percentHint !== type2.percentHint) {
-    return failure;
+    return failure
   }
-  const finalType = {
-    ...type1, percentHint: type1.percentHint ?? type2.percentHint,
-  };
+  const finalType: CSSNumericType = { ...type1 }
+  const hint = type1.percentHint ?? type2.percentHint
+  if (hint !== undefined) finalType.percentHint = hint
 
   for (const baseType of baseTypes) {
     if (!type2[baseType]) {
-      continue;
+      continue
     }
-    finalType[baseType] ??= 0;
-    finalType[baseType] += type2[baseType];
+    finalType[baseType] ??= 0
+    finalType[baseType] = (finalType[baseType] ?? 0) + required(type2[baseType])
   }
-  return finalType;
+  return finalType
 }
 
 class CSSFunction {
-  name;
-  values;
-  constructor(name, values) {
-    this.name = name;
-    this.values = values;
+  name: string
+  values: ComponentValue[]
+  constructor(name: string, values: ComponentValue[]) {
+    this.name = name
+    this.values = values
   }
 }
 
 class CSSSimpleBlock {
-  value;
-  associatedToken;
-  constructor(value, associatedToken) {
-    this.value = value;
-    this.associatedToken = associatedToken;
+  value: ComponentValue[]
+  associatedToken: OpeningToken
+  constructor(value: ComponentValue[], associatedToken: OpeningToken) {
+    this.value = value
+    this.associatedToken = associatedToken
   }
 }
 
@@ -447,15 +545,15 @@ class CSSSimpleBlock {
  * Normalize into a token stream
  * https://www.w3.org/TR/css-syntax-3/#normalize-into-a-token-stream
  */
-function normalizeIntoTokenStream(input) {
+function normalizeIntoTokenStream(input: string | CSSToken[]): CSSToken[] {
   // If input is a list of CSS tokens, return input.
   // If input is a list of CSS component values, return input.
   if (Array.isArray(input)) {
-    return input;
+    return input
   }
   // If input is a string, then filter code points from input, tokenize the result, and return the final result.
   if (typeof input === 'string') {
-    return tokenizeString(input);
+    return tokenizeString(input)
   }
   // Assert: Only the preceding types should be passed as input.
   throw new TypeError(`Invalid input type ${typeof input}`)
@@ -467,26 +565,26 @@ function normalizeIntoTokenStream(input) {
  * @param {FunctionToken} token
  * @param {Token[]} tokens
  */
-function consumeFunction(token, tokens) {
+function consumeFunction(token: FunctionToken, tokens: CSSToken[]): CSSFunction {
   // Create a function with its name equal to the value of the current input token and with its value initially set to an empty list.
-  const func = new CSSFunction(token.value, []);
+  const func = new CSSFunction(token.value, [])
 
   // Repeatedly consume the next input token and process it as follows:
-  while(true) {
-    const nextToken = tokens.shift();
+  while (true) {
+    const nextToken = tokens.shift()
     if (nextToken instanceof RightParenthesisToken) {
       // <)-token>
       // Return the function.
-      return func;
+      return func
     } else if (typeof nextToken === 'undefined') {
       // <EOF-token>
       // This is a parse error. Return the function.
-      return func;
+      return func
     } else {
       // anything else
       // Reconsume the current input token. Consume a component value and append the returned value to the function’s value.
-      tokens.unshift(nextToken);
-      func.values.push(consumeComponentValue(tokens));
+      tokens.unshift(nextToken)
+      func.values.push(required(consumeComponentValue(tokens)))
     }
   }
 }
@@ -497,39 +595,41 @@ function consumeFunction(token, tokens) {
  * @param {Token[]} tokens
  * @param {LeftCurlyBracketToken | LeftParenthesisToken | LeftSquareBracketToken} currentInputToken
  */
-function consumeSimpleBlock(tokens, currentInputToken) {
+function consumeSimpleBlock(tokens: CSSToken[], currentInputToken: OpeningToken): CSSSimpleBlock {
   // The ending token is the mirror variant of the current input token. (E.g. if it was called with <[-token>, the ending token is <]-token>.)
-  let endingTokenConstructor ;
+  let endingTokenConstructor:
+    | typeof RightCurlyBracketToken
+    | typeof RightParenthesisToken
+    | typeof RightSquareBracketToken
   if (currentInputToken instanceof LeftCurlyBracketToken) {
-    endingTokenConstructor = RightCurlyBracketToken;
+    endingTokenConstructor = RightCurlyBracketToken
   } else if (currentInputToken instanceof LeftParenthesisToken) {
-    endingTokenConstructor = RightParenthesisToken;
+    endingTokenConstructor = RightParenthesisToken
   } else if (currentInputToken instanceof LeftSquareBracketToken) {
-    endingTokenConstructor = RightSquareBracketToken;
+    endingTokenConstructor = RightSquareBracketToken
   } else {
-    return undefined;
+    throw new SyntaxError('Invalid block opener')
   }
 
-
   // Create a simple block with its associated token set to the current input token and with its value initially set to an empty list.
-  const simpleBlock = new CSSSimpleBlock([], currentInputToken);
+  const simpleBlock = new CSSSimpleBlock([], currentInputToken)
 
   // Repeatedly consume the next input token and process it as follows:
   while (true) {
-    const token = tokens.shift();
+    const token = tokens.shift()
     if (token instanceof endingTokenConstructor) {
       // ending token
       // Return the block.
-      return simpleBlock;
+      return simpleBlock
     } else if (typeof token === 'undefined') {
       // <EOF-token>
       // This is a parse error. Return the block.
-      return simpleBlock;
+      return simpleBlock
     } else {
       // anything else
       // Reconsume the current input token. Consume a component value and append it to the value of the block.
-      tokens.unshift(token);
-      simpleBlock.value.push(consumeComponentValue(tokens));
+      tokens.unshift(token)
+      simpleBlock.value.push(required(consumeComponentValue(tokens)))
     }
   }
 }
@@ -539,20 +639,23 @@ function consumeSimpleBlock(tokens, currentInputToken) {
  * https://www.w3.org/TR/css-syntax-3/#consume-a-component-value
  * @param {Token[]} tokens
  */
-function consumeComponentValue(tokens) {
-  const syntaxError = null;
+function consumeComponentValue(tokens: CSSToken[]): ComponentValue | undefined {
   // Consume the next input token.
-  const token = tokens.shift();
+  const token = tokens.shift()
 
-  if (token instanceof LeftCurlyBracketToken || token instanceof LeftSquareBracketToken || token instanceof LeftParenthesisToken) {
+  if (
+    token instanceof LeftCurlyBracketToken ||
+    token instanceof LeftSquareBracketToken ||
+    token instanceof LeftParenthesisToken
+  ) {
     // If the current input token is a <{-token>, <[-token>, or <(-token>, consume a simple block and return it.
-    return consumeSimpleBlock(tokens, token);
+    return consumeSimpleBlock(tokens, token)
   } else if (token instanceof FunctionToken) {
     // Otherwise, if the current input token is a <function-token>, consume a function and return it.
-    return consumeFunction(token, tokens);
+    return consumeFunction(token, tokens)
   } else {
     // Otherwise, return the current input token.
-    return token;
+    return token
   }
 }
 
@@ -561,71 +664,77 @@ function consumeComponentValue(tokens) {
  * https://www.w3.org/TR/css-syntax-3/#parse-component-value
  * @param {string} input
  */
-function parseComponentValue(input) {
-  const syntaxError = null;
+function parseComponentValue(input: string): ComponentValue | null | undefined {
+  const syntaxError = null
   // To parse a component value from input:
   // 1. Normalize input, and set input to the result.
-  const tokens = normalizeIntoTokenStream(input);
+  const tokens = normalizeIntoTokenStream(input)
 
   // 2. While the next input token from input is a <whitespace-token>, consume the next input token from input.
   while (tokens[0] instanceof WhitespaceToken) {
-    tokens.shift();
+    tokens.shift()
   }
   // 3. If the next input token from input is an <EOF-token>, return a syntax error.
   if (typeof tokens[0] === 'undefined') {
-    return syntaxError;
+    return syntaxError
   }
   // 4. Consume a component value from input and let value be the return value.
-  const returnValue = consumeComponentValue(tokens);
+  const returnValue = consumeComponentValue(tokens)
   // 5. While the next input token from input is a <whitespace-token>, consume the next input token.
   while (tokens[0] instanceof WhitespaceToken) {
-    tokens.shift();
+    tokens.shift()
   }
   // 6. If the next input token from input is an <EOF-token>, return value. Otherwise, return a syntax error.
   if (typeof tokens[0] === 'undefined') {
-    return returnValue;
+    return returnValue
   } else {
-    return syntaxError;
+    return syntaxError
   }
 }
 
-function precedence(token) {
+function precedence(token: DelimToken | LeftParenthesisToken | RightParenthesisToken): number {
   if (token instanceof LeftParenthesisToken || token instanceof RightParenthesisToken) {
-    return 6;
+    return 6
   } else if (token instanceof DelimToken) {
-    const value = token.value;
+    const value = token.value
     switch (value) {
       case '*':
-        return 4;
+        return 4
       case '/':
-        return 4;
+        return 4
       case '+':
-        return 2;
+        return 2
       case '-':
-        return 2;
+        return 2
     }
   }
+  throw new SyntaxError('Invalid operator')
 }
 
-
-function last(items) {
-  return items[items.length - 1];
+function last<T>(items: readonly T[]): T {
+  return required(items[items.length - 1], 'Missing expression operand')
 }
 
-function toNAryAstNode(operatorToken, first, second) {
+function toNAryAstNode(
+  operatorToken: DelimToken | LeftParenthesisToken | undefined,
+  first: ASTNode | undefined,
+  second: ASTNode | undefined,
+): NAryNode {
   // Treat subtraction as instead being addition, with the RHS argument instead wrapped in a special "negate" node.
   // Treat division as instead being multiplication, with the RHS argument instead wrapped in a special "invert" node.
 
-  const type = ['+','-'].includes(operatorToken.value) ? 'ADDITION' : 'MULTIPLICATION';
-  const firstValues = first.type === type ? first.values : [first];
-  const secondValues = second.type === type ? second.values : [second];
+  if (!(operatorToken instanceof DelimToken) || !first || !second)
+    throw new SyntaxError('Invalid math expression')
+  const type = ['+', '-'].includes(operatorToken.value) ? 'ADDITION' : 'MULTIPLICATION'
+  const firstValues = isNAryNode(first) && first.type === type ? first.values : [first]
+  const secondValues = isNAryNode(second) && second.type === type ? second.values : [second]
 
   if (operatorToken.value === '-') {
-    secondValues[0] = {type: 'NEGATE', value: secondValues[0]};
-  } else if (operatorToken.value   === '/') {
-    secondValues[0] = {type: 'INVERT', value: secondValues[0]};
+    secondValues[0] = { type: 'NEGATE', value: required(secondValues[0]) }
+  } else if (operatorToken.value === '/') {
+    secondValues[0] = { type: 'INVERT', value: required(secondValues[0]) }
   }
-  return {type, values: [...firstValues, ...secondValues]};
+  return { type, values: [...firstValues, ...secondValues] }
 }
 
 /**
@@ -634,56 +743,64 @@ function toNAryAstNode(operatorToken, first, second) {
  * @param {(Token | CSSFunction)[]} tokens
  * @return {null}
  */
-function convertTokensToAST(tokens) {
-  const operatorStack = [];
-  const tree = [];
+function convertTokensToAST(tokens: ComponentValue[]): ASTNode | null {
+  const operatorStack: (DelimToken | LeftParenthesisToken)[] = []
+  const tree: ASTNode[] = []
   while (tokens.length) {
-    const token = tokens.shift();
-    if (token instanceof NumberToken || token instanceof DimensionToken || token instanceof PercentageToken ||
-      token instanceof CSSFunction || token instanceof CSSSimpleBlock || token instanceof IdentToken) {
-      tree.push(token);
+    const token = tokens.shift()
+    if (
+      token instanceof NumberToken ||
+      token instanceof DimensionToken ||
+      token instanceof PercentageToken ||
+      token instanceof CSSFunction ||
+      token instanceof CSSSimpleBlock ||
+      token instanceof IdentToken
+    ) {
+      tree.push(token)
     } else if (token instanceof DelimToken && ['*', '/', '+', '-'].includes(token.value)) {
-      while (operatorStack.length &&
-      !(last(operatorStack) instanceof LeftParenthesisToken) &&
-      precedence(last(operatorStack)) > precedence(token)) {
-        const o2 = operatorStack.pop();
-        const second = tree.pop();
-        const first = tree.pop();
-        tree.push(toNAryAstNode(o2, first, second));
+      while (
+        operatorStack.length &&
+        !(last(operatorStack) instanceof LeftParenthesisToken) &&
+        precedence(last(operatorStack)) > precedence(token)
+      ) {
+        const o2 = operatorStack.pop()
+        const second = tree.pop()
+        const first = tree.pop()
+        tree.push(toNAryAstNode(o2, first, second))
       }
-      operatorStack.push(token);
+      operatorStack.push(token)
     } else if (token instanceof LeftParenthesisToken) {
-      operatorStack.push(token);
+      operatorStack.push(token)
     } else if (token instanceof RightParenthesisToken) {
       if (!operatorStack.length) {
-        return null;
+        return null
       }
-      while (!(last(operatorStack) instanceof LeftParenthesisToken) ) {
-        const o2 = operatorStack.pop();
-        const second = tree.pop();
-        const first = tree.pop();
-        tree.push(toNAryAstNode(o2, first, second));
+      while (!(last(operatorStack) instanceof LeftParenthesisToken)) {
+        const o2 = operatorStack.pop()
+        const second = tree.pop()
+        const first = tree.pop()
+        tree.push(toNAryAstNode(o2, first, second))
       }
       if (!(last(operatorStack) instanceof LeftParenthesisToken)) {
-        return null;
+        return null
       }
-      operatorStack.pop();
+      operatorStack.pop()
     } else if (token instanceof WhitespaceToken) {
       // Consume token
     } else {
-      return null;
+      return null
     }
   }
-  while(operatorStack.length) {
+  while (operatorStack.length) {
     if (last(operatorStack) instanceof LeftParenthesisToken) {
-      return null;
+      return null
     }
     const o2 = operatorStack.pop()
-    const second = tree.pop();
-    const first = tree.pop();
-    tree.push(toNAryAstNode(o2, first, second));
+    const second = tree.pop()
+    const first = tree.pop()
+    tree.push(toNAryAstNode(o2, first, second))
   }
-  return tree[0];
+  return tree.length === 1 ? required(tree[0]) : null
 }
 
 /**
@@ -695,38 +812,47 @@ function convertTokensToAST(tokens) {
  * @param {ASTNode} node
  * @return {CSSMathNegate|CSSMathProduct|CSSMathMin|CSSMathMax|CSSMathSum|CSSNumericValue|CSSUnitValue|CSSMathInvert}
  */
-function transformToCSSNumericValue(node) {
-  if (node.type === 'ADDITION') {
+function transformToCSSNumericValue(node: ASTNode): PolyfillNumericValue {
+  if ('type' in node && node.type === 'ADDITION') {
     // addition node
-    // becomes a new CSSMathSum object, with its values internal slot set to its list of arguments
-    return new CSSMathSum(...node.values.map(value => transformToCSSNumericValue(value)));
-  } else if (node.type === 'MULTIPLICATION') {
+    // becomes a new numeric.CSSMathSum object, with its values internal slot set to its list of arguments
+    return new numeric.CSSMathSum(...node.values.map((value) => transformToCSSNumericValue(value)))
+  } else if ('type' in node && node.type === 'MULTIPLICATION') {
     // multiplication node
-    // becomes a new CSSMathProduct object, with its values internal slot set to its list of arguments
-    return new CSSMathProduct(...node.values.map(value => transformToCSSNumericValue(value)));
-  } else  if (node.type === 'NEGATE') {
+    // becomes a new numeric.CSSMathProduct object, with its values internal slot set to its list of arguments
+    return new numeric.CSSMathProduct(
+      ...node.values.map((value) => transformToCSSNumericValue(value)),
+    )
+  } else if ('type' in node && node.type === 'NEGATE') {
     // negate node
-    // becomes a new CSSMathNegate object, with its value internal slot set to its argument
-    return new CSSMathNegate(transformToCSSNumericValue(node.value));
-  } else if (node.type === 'INVERT') {
+    // becomes a new numeric.CSSMathNegate object, with its value internal slot set to its argument
+    return new numeric.CSSMathNegate(transformToCSSNumericValue(node.value))
+  } else if ('type' in node && node.type === 'INVERT') {
     // invert node
-    // becomes a new CSSMathInvert object, with its value internal slot set to its argument
-    return new CSSMathInvert(transformToCSSNumericValue(node.value));
+    // becomes a new numeric.CSSMathInvert object, with its value internal slot set to its argument
+    return new numeric.CSSMathInvert(transformToCSSNumericValue(node.value))
   } else {
     // leaf node
     // reified as appropriate
     if (node instanceof CSSSimpleBlock) {
-      return reifyMathExpression(new CSSFunction('calc', node.value));
+      return reifyMathExpression(new CSSFunction('calc', node.value))
     } else if (node instanceof IdentToken) {
       if (node.value === 'e') {
-        return new CSSUnitValue(Math.E, 'number');
+        return new numeric.CSSUnitValue(Math.E, 'number')
       } else if (node.value === 'pi') {
-        return new CSSUnitValue(Math.PI, 'number');
+        return new numeric.CSSUnitValue(Math.PI, 'number')
       } else {
         throw new SyntaxError('Invalid math expression')
       }
     } else {
-      return reifyNumericValue(node);
+      if (
+        node instanceof NumberToken ||
+        node instanceof PercentageToken ||
+        node instanceof DimensionToken ||
+        node instanceof CSSFunction
+      )
+        return reifyNumericValue(node)
+      throw new SyntaxError('Invalid numeric operand')
     }
   }
 }
@@ -736,24 +862,25 @@ function transformToCSSNumericValue(node) {
  * https://drafts.css-houdini.org/css-typed-om/#reify-a-math-expression
  * @param {CSSFunction} num
  */
-function reifyMathExpression(num) {
+function reifyMathExpression(num: CSSFunction): PolyfillNumericValue {
   // TODO: handle `clamp()` and possibly other math functions
   // 1. If num is a min() or max() expression:
-  if (num.name === 'min' || num.name === 'max')
-  {
+  if (num.name === 'min' || num.name === 'max') {
     // Let values be the result of reifying the arguments to the expression, treating each argument as if it were the contents of a calc() expression.
     const values = num.values
-      .filter(value => !(value instanceof WhitespaceToken || value instanceof CommaToken))
+      .filter((value) => !(value instanceof WhitespaceToken || value instanceof CommaToken))
       // TODO: Update when we have clarification on where simplify a calculation should be run:
       // https://github.com/w3c/csswg-drafts/issues/9870
-      .map(value => simplifyCalculation(reifyMathExpression(new CSSFunction('calc', value))));
-    // Return a new CSSMathMin or CSSMathMax object, respectively, with its values internal slot set to values.
-    return num.name === 'min' ? new CSSMathMin(...values) : new CSSMathMax(...values);
+      .map((value) => simplifyCalculation(reifyMathExpression(new CSSFunction('calc', [value]))))
+    // Return a new numeric.CSSMathMin or numeric.CSSMathMax object, respectively, with its values internal slot set to values.
+    return num.name === 'min'
+      ? new numeric.CSSMathMin(...values)
+      : new numeric.CSSMathMax(...values)
   }
 
   // 2. Assert: Otherwise, num is a calc().
   if (num.name !== 'calc') {
-    return null;
+    throw new SyntaxError('Unsupported math expression')
   }
 
   // 3. Turn num’s argument into an expression tree using standard PEMDAS precedence rules, with the following exceptions/clarification:
@@ -762,23 +889,23 @@ function reifyMathExpression(num) {
   // Treat division as instead being multiplication, with the RHS argument instead wrapped in a special "invert" node.
   // Addition and multiplication are N-ary; each node can have any number of arguments.
   // If an expression has only a single value in it, and no operation, treat it as an addition node with the single argument.
-  const root = convertTokensToAST([...num.values]);
+  const root = convertTokensToAST([...num.values])
 
   // 4. Recursively transform the expression tree into objects
-  const numericValue = transformToCSSNumericValue(root);
-  let simplifiedValue;
+  const numericValue = transformToCSSNumericValue(required(root, 'Invalid math expression'))
+  let simplifiedValue: PolyfillNumericValue
   try {
     // TODO: Update when we have clarification on where simplify a calculation should be run:
     // https://github.com/w3c/csswg-drafts/issues/9870
-    simplifiedValue = simplifyCalculation(numericValue);
-  } catch (e) {
+    simplifiedValue = simplifyCalculation(numericValue)
+  } catch (_e) {
     // Use insertRule to trigger native SyntaxError on TypeError
-    (new CSSStyleSheet()).insertRule('error', 0);
+    throw new SyntaxError('Invalid CSS numeric value')
   }
-  if (simplifiedValue instanceof CSSUnitValue) {
-    return new CSSMathSum(simplifiedValue);
+  if (simplifiedValue instanceof numeric.CSSUnitValue) {
+    return new numeric.CSSMathSum(simplifiedValue)
   } else {
-    return simplifiedValue;
+    return simplifiedValue
   }
 }
 
@@ -787,29 +914,32 @@ function reifyMathExpression(num) {
  * https://drafts.css-houdini.org/css-typed-om/#reify-a-numeric-value
  * @param num
  */
-function reifyNumericValue(num) {
+function reifyNumericValue(
+  num: NumberToken | PercentageToken | DimensionToken | CSSFunction,
+): PolyfillNumericValue {
   // If an internal representation contains a var() reference, then it is reified by reifying a list of component values,
   // regardless of what property it is for.
   // TODO: handle `var()` function
 
   // If num is a math function, reify a math expression from num and return the result.
   if (num instanceof CSSFunction && ['calc', 'min', 'max', 'clamp'].includes(num.name)) {
-    return reifyMathExpression(num);
+    return reifyMathExpression(num)
   }
   // If num is the unitless value 0 and num is a <dimension>,
-  // return a new CSSUnitValue with its value internal slot set to 0, and its unit internal slot set to "px".
-  if (num instanceof NumberToken && num.value === 0 && !num.unit) {
-    return new CSSUnitValue(0, 'px');
+  // return a new numeric.CSSUnitValue with its value internal slot set to 0, and its unit internal slot set to "px".
+  if (num instanceof DimensionToken && num.value === 0 && !num.unit) {
+    return new numeric.CSSUnitValue(0, 'px')
   }
-  // Return a new CSSUnitValue with its value internal slot set to the numeric value of num, and its unit internal slot
+  // Return a new numeric.CSSUnitValue with its value internal slot set to the numeric value of num, and its unit internal slot
   // set to "number" if num is a <number>, "percent" if num is a <percentage>, and num’s unit if num is a <dimension>.
   if (num instanceof NumberToken) {
-    return new CSSUnitValue(num.value, 'number');
+    return new numeric.CSSUnitValue(num.value, 'number')
   } else if (num instanceof PercentageToken) {
-    return new CSSUnitValue(num.value, 'percent');
+    return new numeric.CSSUnitValue(num.value, 'percent')
   } else if (num instanceof DimensionToken) {
-    return new CSSUnitValue(num.value, num.unit);
+    return new numeric.CSSUnitValue(num.value, num.unit)
   }
+  throw new SyntaxError('Invalid numeric value')
 }
 
 /**
@@ -818,27 +948,34 @@ function reifyNumericValue(num) {
  * @param {string} cssText
  * @return {CSSMathMin|CSSMathMax|CSSMathSum|CSSMathProduct|CSSMathNegate|CSSMathInvert|CSSUnitValue}
  */
-export function parseCSSNumericValue(cssText) {
+export function parseCSSNumericValue(cssText: string): PolyfillNumericValue {
   // Parse a component value from cssText and let result be the result.
   // If result is a syntax error, throw a SyntaxError and abort this algorithm.
-  const result = parseComponentValue(cssText);
+  const result = parseComponentValue(cssText)
   if (result === null) {
     // Use insertRule to trigger native SyntaxError
-    (new CSSStyleSheet()).insertRule('error', 0);
+    throw new SyntaxError('Invalid CSS numeric value')
   }
   // If result is not a <number-token>, <percentage-token>, <dimension-token>, or a math function, throw a SyntaxError and abort this algorithm.
-  if (!(result instanceof NumberToken || result instanceof PercentageToken || result instanceof DimensionToken || result instanceof CSSFunction)) {
+  if (
+    !(
+      result instanceof NumberToken ||
+      result instanceof PercentageToken ||
+      result instanceof DimensionToken ||
+      result instanceof CSSFunction
+    )
+  ) {
     // Use insertRule to trigger native SyntaxError
-    (new CSSStyleSheet()).insertRule('error', 0);
+    throw new SyntaxError('Invalid CSS numeric value')
   }
   // If result is a <dimension-token> and creating a type from result’s unit returns failure, throw a SyntaxError and abort this algorithm.
   if (result instanceof DimensionToken) {
-    const type = createAType(result.unit);
+    const type = createAType(result.unit)
     if (type === null) {
       // Use insertRule to trigger native SyntaxError
-      (new CSSStyleSheet()).insertRule('error', 0);
+      throw new SyntaxError('Invalid CSS numeric value')
     }
   }
   // Reify a numeric value result, and return the result.
-  return reifyNumericValue(result);
+  return reifyNumericValue(result)
 }

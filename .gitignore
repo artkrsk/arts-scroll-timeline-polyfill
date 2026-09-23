@@ -74,7 +74,7 @@ next-env.d.ts
 *.temp
 
 # WordPress delivery assets under src/php/libraries/ are committed. The
-# production bundle is regenerated from src/js; development maps are ignored.
+# production bundle is regenerated from src/ts; development maps are ignored.
 
 # Project specific
 /drafts

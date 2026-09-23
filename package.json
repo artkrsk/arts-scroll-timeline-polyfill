@@ -9,17 +9,20 @@
   },
   "scripts": {
     "dev": "concurrently -k \"pnpm dev:lib\" \"pnpm dev:fixture\"",
-    "dev:lib": "vite build --mode development --watch",
+    "dev:lib": "node scripts/build.ts --watch",
     "dev:fixture": "vite --host 127.0.0.1 --port 8844",
-    "build": "vite build --mode production",
-    "format": "biome format --write src/js/arts vite.config.ts playwright.config.ts scripts tests biome.json",
-    "format:check": "biome format src/js/arts vite.config.ts playwright.config.ts scripts tests biome.json",
-    "lint": "biome lint src/js/arts tests vite.config.ts playwright.config.ts && biome lint src/js/upstream --only=correctness/noUndeclaredVariables",
-    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.ts",
+    "format": "biome format --write src/ts scripts tests *.config.ts biome.json tsconfig*.json",
+    "format:check": "biome format src/ts scripts tests *.config.ts biome.json tsconfig*.json",
+    "lint": "biome lint src/ts scripts tests *.config.ts",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.tooling.json --noEmit && tsc -p tsconfig.fixtures.json --noEmit",
     "test:unit": "vitest run tests/unit",
     "test:browser": "playwright test",
-    "check:generated": "node scripts/check-generated.mjs",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit"
+    "check:generated": "node scripts/check-generated.ts",
+    "check": "pnpm check:source && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:types",
+    "build:fixtures": "vite build --config vite.fixtures.config.ts",
+    "test:types": "node scripts/check-types.ts",
+    "check:source": "node scripts/check-source.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.12",
@@ -30,5 +33,22 @@
     "typescript": "7.0.2",
     "vite": "8.0.10",
     "vitest": "5.0.0"
-  }
+  },
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts"
+    },
+    "./globals": {
+      "types": "./types/globals.d.ts"
+    }
+  },
+  "files": [
+    "types",
+    "src/php",
+    "LICENSE",
+    "README.md",
+    "BROWSER_APIS.md",
+    "UPSTREAM.md"
+  ]
 }

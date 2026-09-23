@@ -1,6 +1,6 @@
 # Upstream source and Arts patches
 
-The readable files in `src/js/upstream/` began with the `src/` directory of
+The readable files in `src/ts/upstream/` began with the `src/` directory of
 `scroll-timeline-polyfill` version **1.1.0** published on npm. The package's
 recorded `gitHead` is `b12de7813379379709602ac9bad2c100effe963e`; the
 tarball's SHA-512 integrity is
@@ -9,7 +9,7 @@ The exact tarball and its integrity are the source baseline. Its copyright
 headers remain on the source files, and the Apache-2.0 license is delivered
 as `src/php/libraries/scroll-timeline/LICENSE`.
 
-Arts changes are maintained in the readable source. The `src/js/arts/` modules
+Arts changes are maintained in the readable source. The `src/ts/arts/` modules
 contain CSS value parsing, stylesheet ownership, and binding refresh logic;
 the upstream modules expose named internal hooks and carry these focused fixes:
 
@@ -33,11 +33,35 @@ the upstream modules expose named internal hooks and carry these focused fixes:
    identical authored text. Rebind existing animation proxies, release removed
    bindings, and bound mutation processing to changed nodes.
 
-To update upstream, obtain its **source** tarball at an exact version and
-verify the integrity from npm metadata. Extract it outside the repository;
-diff its `src/` against `src/js/upstream/` to see the current Arts edits.
-Rebase those edits onto the new modules, keeping the named exports used by
-`src/js/arts/`. Update this file's version, integrity, revision, and patch
-inventory. Do not copy an upstream `dist` file over the delivery asset or edit
-generated JavaScript. Run the full verification in the README, inspect the
-generated diff, then commit the readable source and generated asset together.
+## TypeScript fork
+
+The original JavaScript modules now correspond to `.ts` modules under the same
+upstream/Arts split. Private timeline, animation, parser, and numeric state is
+explicitly typed. Platform adapters describe the partial Typed OM surface and
+native method boundaries. Shared probes and constants drive both entrypoints;
+public declarations contain only supported consumer contracts.
+
+Migration fixes additionally cover omitted/numeric/frozen animation options,
+keyword insets, canonical CSS factory units and `CSS.rem`, replacement state,
+`commitStyles` and event dispatch forwarding, persisted page lifecycle, parser
+operand validation, and nullable geometry. The stylesheet skip comparison now
+has explicit membership precedence. Numeric zero is a number; converting a unit
+to itself is valid. The unused duplicate inset parser was removed. The effect
+adapter intercepts timing methods while retaining native receivers and source
+methods. Existing no-inset defaults and provider ownership remain covered.
+
+## Updating upstream
+
+1. Obtain the **source** tarball at an exact version and verify its npm integrity.
+   Extract it outside the repository. Keep the original baseline identified
+   above available for comparison; do not add a second maintained JavaScript tree.
+2. Compare the new upstream JavaScript against that original JavaScript baseline
+   to identify semantic upstream changes. Map source filenames from `.js` to
+   `.ts`, then port those changes into the typed modules while retaining Arts
+   patches, type contracts, and copyright headers.
+3. Update the version, integrity, revision, patch inventory, and browser API audit.
+   Preserve the named hooks consumed by the Arts modules. Avoid replacing a
+   delivery asset with upstream `dist` output.
+4. Run the README verification, including consumer types, all browser projects,
+   PHP integration, and deterministic generation. Commit readable source, both
+   generated script assets, and generated declarations together.

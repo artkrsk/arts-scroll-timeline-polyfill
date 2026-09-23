@@ -2,15 +2,31 @@
   "$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
   "files": {
     "includes": [
-      "src/js/**/*.js",
-      "scripts/**/*.js",
-      "scripts/**/*.mjs",
-      "tests/**/*.js",
+      "src/ts/**/*.ts",
+      "scripts/**/*.ts",
       "tests/**/*.ts",
-      "*.config.ts"
+      "*.config.ts",
+      "tsconfig*.json"
     ]
   },
-  "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
-  "javascript": { "formatter": { "semicolons": "asNeeded", "quoteStyle": "single" } },
-  "linter": { "rules": { "preset": "recommended" } }
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "semicolons": "asNeeded",
+      "quoteStyle": "single"
+    }
+  },
+  "linter": {
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noExplicitAny": "error",
+        "noTsIgnore": "error"
+      }
+    }
+  }
 }

@@ -35,6 +35,13 @@ jobs:
       - run: composer install --no-interaction --no-scripts --prefer-dist
       - run: pnpm check
       - run: composer check
-      - run: pnpm exec playwright install --with-deps chromium firefox
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
       - run: pnpm check:generated
       - run: pnpm test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-results
+          path: ArtsScrollTimelinePolyfill/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

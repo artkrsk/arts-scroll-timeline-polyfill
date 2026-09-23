@@ -1,14 +1,8 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "types": ["node", "vitest/globals"],
-    "strict": true,
-    "allowJs": true,
-    "checkJs": false,
-    "noEmit": true,
-    "skipLibCheck": true
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": []
   },
-  "include": ["vite.config.ts", "playwright.config.ts", "tests/**/*.ts", "scripts/**/*.ts"]
+  "include": ["src/ts/**/*.ts"]
 }
