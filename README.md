@@ -37,7 +37,7 @@ const state = await window.__artsScrollTimelinePolyfillReady
 
 ### Opting a stylesheet out
 
-The polyfill's CSS layer refetches and re-serializes whole stylesheets through a naive parser. If you drive your animations from JS, or a sheet trips the parser, opt it out by handle:
+The polyfill's CSS layer refetches and re-serializes stylesheets containing timeline syntax through its upstream parser. If you drive your animations from JS, or a sheet trips the parser, opt it out by handle:
 
 ```php
 add_filter(
@@ -56,6 +56,23 @@ This tags the `<link>` with `data-aphrodite`, the polyfill's own skip vocabulary
 2. **`<link data-aphrodite>` opts a sheet out.** Upstream honors the attribute on inline `<style>` only.
 3. **The whole body is wrapped in a native-support guard**, testing the named timeline syntax alongside the anonymous functions — a browser implementing only part of the feature must not be misread as fully native.
 4. **Source measurement bails on detached sources.** Upstream throws when an AJAX page swap detaches a timeline source between observer registration and callback.
+5. **Zero-length ranges remain finite.** A subject exactly as tall as its scrollport has a zero-length contain range; converting its percentage to animation time must not divide by zero.
+6. **Skipped hostile stylesheets stay quiet.** Elementor inline CSS can trip the upstream parser; those sheets cannot abort initialization or flood the console.
+7. **Unrelated stylesheets remain untouched.** Sheets without timeline syntax are not replaced with blobs, avoiding a stylesheet-detachment flash during AJAX navigation.
+8. **CSS scroll animations bind reliably.** Scroll-bound `auto` and omitted durations get a finite `1s` bootstrap, including longhands and animation lists. Explicit durations and fill modes are preserved. CSS list parsing respects functions, strings and escapes. View timeline insets resolve custom properties against the subject, including nested fallbacks; inherited variable changes and geometry updates refresh their resolved values.
+9. **Stylesheet replacement updates existing bindings.** Inline style text and character-data changes replace that sheet's registrations in DOM order. Existing animation proxies receive updated timelines, ranges and insets without duplicate wrappers. Removed sheets and declarations release old bindings; the observer ignores the polyfill's emitted text.
+
+The current asset cache version is `1.1.0-arts.4`. The readable Arts patch block inside the shipped bundle is intentional: this package has no upstream rebuild dependency. Keep the native-support guards in the loader and bundle intact when updating it.
+
+### Browser regression fixture
+
+Serve this package root over HTTP and open `tests/browser-parity.html` in Firefox and a browser with native scroll timeline support. For example:
+
+```sh
+python3 -m http.server 8844 --bind 127.0.0.1
+```
+
+The fixture loads the actual shipped bundle and reports results in the page and `window.__artsParityFixture`. It covers longhand/shorthand/omitted durations, animation lists and fill modes, inherited inset variable changes, nested fallbacks, repeated style replacement with unchanged animation names, character-data updates, stylesheet order/removal, and binding restoration. Chrome also exercises the bundle's native guard.
 
 ## License
 

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scroll timeline shipped-bundle regression fixture</title>
+  <script>
+    window.__artsFixtureNative = CSS.supports('animation-timeline: view()') && CSS.supports('view-timeline: --probe block');
+    window.__artsFixtureErrors = [];
+    window.addEventListener('error', event => __artsFixtureErrors.push(event.message));
+    window.addEventListener('unhandledrejection', event => __artsFixtureErrors.push(String(event.reason)));
+  </script>
+  <style data-aphrodite>
+    body { font: 14px system-ui; --offset: 40px; }
+    #scroller { block-size: 300px; inline-size: 360px; overflow: auto; border: 1px solid; }
+    .spacer { block-size: 300px; }
+    #subject { block-size: 600px; position: relative; background: #eee; }
+    .probe { block-size: 30px; inline-size: 100px; background: #247; color: white; margin-block: 5px; }
+    #result { white-space: pre-wrap; }
+  </style>
+  <style id="fixture-css">
+    @keyframes fixture-fade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes fixture-move { from { translate: 0 0; } to { translate: 100px 0; } }
+    #subject { view-timeline: --fixture block; view-timeline-inset: var(--offset, var(--fallback, 0px)) 0px; }
+    #longhand { animation-name: fixture-fade; animation-duration: auto; animation-timing-function: linear; animation-fill-mode: none; animation-timeline: --fixture; animation-range: cover; }
+    #shorthand { animation: fixture-fade auto cubic-bezier(0, 0, 1, 1); animation-timeline: --fixture; animation-range: cover; }
+    #omitted { animation-name: fixture-fade; animation-timing-function: linear; animation-timeline: --fixture; animation-range: cover; }
+    #explicit { animation: fixture-fade 2s linear both; animation-timeline: --fixture; animation-range: cover; }
+    #list { animation: fixture-fade auto linear both, fixture-move 2s linear both; animation-timeline: --fixture, --fixture; animation-range: cover, cover; }
+  </style>
+  <script>window.__artsFixtureAuthoredStyles = document.querySelector('#fixture-css').textContent;</script>
+  <script defer src="../src/php/libraries/scroll-timeline/scroll-timeline.js"></script>
+</head>
+<body>
+  <h1>Shipped bundle regression fixture</h1>
+  <p>Runs in native Chrome and polyfilled Firefox. Results are also available in <code>window.__artsParityFixture</code>.</p>
+  <div id="scroller"><div class="spacer"></div><div id="subject">
+    <div id="longhand" class="probe">longhand auto</div>
+    <div id="shorthand" class="probe">shorthand auto</div>
+    <div id="omitted" class="probe">omitted duration</div>
+    <div id="explicit" class="probe">explicit duration</div>
+    <div id="list" class="probe">animation list</div>
+  </div><div class="spacer"></div></div>
+  <pre id="result">Running…</pre>
+  <script>
+    window.addEventListener('load', async () => {
+      const result = {native: __artsFixtureNative, passed: [], failed: [], errors: __artsFixtureErrors};
+      window.__artsParityFixture = result;
+      const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+      const settle = async () => { for (let index = 0; index < 8; index++) await frame(); };
+      const check = (condition, label) => (condition ? result.passed : result.failed).push(label);
+      const css = document.querySelector('#fixture-css');
+      const original = css.textContent;
+      const scroller = document.querySelector('#scroller');
+      const longhand = document.querySelector('#longhand');
+      const proxy = () => longhand.getAnimations()[0];
+      const isView = animation => animation?.timeline instanceof ViewTimeline;
+      try {
+        scroller.scrollTop = 300;
+        await settle();
+        for (const id of ['longhand', 'shorthand', 'omitted', 'explicit', 'list']) {
+          const animations = document.getElementById(id).getAnimations();
+          check(animations.length === (id === 'list' ? 2 : 1) && animations.every(isView), `${id}: all animations bound`);
+        }
+        check(getComputedStyle(longhand).animationFillMode === 'none', 'Explicit fill:none preserved');
+        check(getComputedStyle(document.querySelector('#explicit')).animationDuration === '2s', 'Explicit 2s duration preserved');
+        for (let index = 0; index < 2; index++) {
+          css.textContent = __artsFixtureAuthoredStyles;
+          await settle();
+          check(longhand.getAnimations().length === 1 && isView(proxy()) &&
+            document.querySelector('#shorthand').getAnimations().some(isView) &&
+            (__artsFixtureNative || getComputedStyle(longhand).animationDuration === '1s'),
+            `Identical authored HMR ${index + 1}: normalization and binding survive`);
+        }
+        const first = proxy();
+        const opacity = parseFloat(getComputedStyle(longhand).opacity);
+        check(Math.abs(opacity - 300 / 860) < .015, 'Subject inset fallback list produces expected cover progress');
+        document.body.style.setProperty('--offset', '80px');
+        await settle();
+        check(Math.abs(parseFloat(getComputedStyle(longhand).opacity) - 300 / 820) < .015, 'Inherited variable change refreshes inset without resizing subject');
+        document.body.style.setProperty('--offset', 'var(--missing, 60px)');
+        await settle();
+        check(Math.abs(parseFloat(getComputedStyle(longhand).opacity) - 300 / 840) < .015, 'Nested variable fallback resolves');
+        const ranged = original.replace(/animation-range: cover/g, 'animation-range: contain');
+        for (let index = 0; index < 3; index++) {
+          css.textContent = ranged;
+          await settle();
+          check(longhand.getAnimations().length === 1 && isView(proxy()), `HMR ${index + 1}: one bound animation`);
+          check(proxy() === first, `HMR ${index + 1}: existing animation/proxy reused`);
+          check(Math.abs(parseFloat(getComputedStyle(longhand).opacity) - 60 / 360) < .015, `HMR ${index + 1}: unchanged name receives new range`);
+          css.textContent = original;
+          await settle();
+        }
+        css.textContent = original.replace('from { opacity: 0; } to { opacity: 1; }', 'from { opacity: .2; } to { opacity: .8; }');
+        await settle();
+        check(proxy() === first && Math.abs(parseFloat(getComputedStyle(longhand).opacity) - (.2 + .6 * 300 / 840)) < .015, 'Keyframes replacement updates existing proxy effect');
+        css.textContent = original.replace(/--fixture\b/g, '--renamed');
+        await settle();
+        check(proxy() === first && isView(proxy()) && Math.abs(parseFloat(getComputedStyle(longhand).opacity) - 300 / 840) < .015, 'Timeline-name replacement rebinds unchanged animation name');
+        css.textContent = original;
+        await settle();
+        const subject = document.querySelector('#subject');
+        const nextSibling = longhand.nextSibling;
+        const alternate = document.createElement('div');
+        alternate.id = 'alternate-subject';
+        const alternateStyle = document.createElement('style');
+        alternateStyle.textContent = '#alternate-subject { block-size: 600px; view-timeline: --fixture block; view-timeline-inset: var(--offset, 0px) 0px; }';
+        document.head.append(alternateStyle);
+        scroller.insertBefore(alternate, subject);
+        alternate.append(longhand);
+        scroller.scrollTop = 300;
+        await settle();
+        check(isView(proxy()) && proxy().timeline.subject === alternate, 'Moving animated element rebinds its new timeline subject');
+        subject.insertBefore(longhand, nextSibling);
+        alternate.remove();
+        alternateStyle.remove();
+        scroller.scrollTop = 300;
+        await settle();
+        check(isView(proxy()) && proxy().timeline.subject === subject, 'Moving element back releases the temporary timeline');
+        const injected = document.createElement('div');
+        injected.innerHTML = '<style>#injected-auto { animation: fixture-fade auto linear; animation-timeline: --fixture; animation-range: cover; } #injected-mixed { animation: fixture-fade auto linear both, fixture-move 2s linear both; animation-timeline: --fixture, auto; animation-range: cover; }</style><div id="injected-auto">AJAX auto/no fill</div><div id="injected-mixed">mixed timelines</div>';
+        subject.append(injected);
+        await settle();
+        const dynamicAnimations = document.querySelector('#injected-auto').getAnimations();
+        check(dynamicAnimations.length === 1 && isView(dynamicAnimations[0]), 'Dynamically injected auto/no-fill animation binds on first appearance');
+        const mixed = document.querySelector('#injected-mixed');
+        const mixedAnimations = mixed.getAnimations();
+        check(mixedAnimations.length === 2 && mixedAnimations.filter(isView).length === 1 && getComputedStyle(mixed).animationDuration.split(',')[1].trim() === '2s', 'Mixed animation list preserves the explicit time-based slot');
+        injected.remove();
+        await settle();
+        css.firstChild.data = original.replace('var(--offset, var(--fallback, 0px)) 0px', '0px 0px');
+        await settle();
+        check(Math.abs(parseFloat(getComputedStyle(longhand).opacity) - 1 / 3) < .015, 'Character-data HMR updates subject inset');
+        css.textContent = original;
+        await settle();
+        const override = document.createElement('style');
+        override.textContent = '#longhand { animation-name: fixture-fade; animation-duration: 1s; animation-timeline: --fixture; animation-range: contain; }';
+        document.head.append(override);
+        await settle();
+        css.textContent = original + '\n/* earlier sheet replaced */';
+        await settle();
+        check(Math.abs(parseFloat(getComputedStyle(longhand).opacity) - 60 / 360) < .015, 'Replacing earlier sheet preserves later sheet precedence');
+        override.remove();
+        await settle();
+        check(Math.abs(parseFloat(getComputedStyle(longhand).opacity) - 300 / 840) < .015, 'Removing later sheet restores earlier registration');
+        const reset = document.createElement('style');
+        reset.textContent = '#longhand { animation: fixture-fade 2s linear both; }';
+        document.head.append(reset);
+        await settle();
+        check(longhand.getAnimations().length === 1 && !isView(proxy()) && reset.textContent === '#longhand { animation: fixture-fade 2s linear both; }', 'Later shorthand resets earlier timeline without rewriting unrelated sheet');
+        reset.textContent = '#longhand { animation-timeline: --fixture; animation: fixture-fade 2s linear both; }';
+        await settle();
+        check(longhand.getAnimations().length === 1 && !isView(proxy()), 'Shorthand after timeline resets it within one rule');
+        reset.remove();
+        await settle();
+        check(longhand.getAnimations().length === 1 && isView(proxy()), 'Removing shorthand reset restores earlier timeline');
+        css.textContent = original.replace(/animation-timeline: --fixture(?:, --fixture)?;/g, '');
+        await settle();
+        check(longhand.getAnimations().every(animation => !isView(animation)), 'Removing timeline declarations releases old binding');
+        css.textContent = original;
+        await settle();
+        check(longhand.getAnimations().length === 1 && isView(proxy()), 'Restoring stylesheet binds without duplicate proxies');
+        check(result.errors.length === 0, 'No browser errors or unhandled rejections');
+      } catch (error) { result.failed.push(String(error.stack ?? error)); }
+      result.complete = true;
+      document.querySelector('#result').textContent = JSON.stringify(result, null, 2);
+      document.title = result.failed.length ? 'FAIL: scroll timeline fixture' : 'PASS: scroll timeline fixture';
+    });
+  </script>
+</body>
+</html>
