@@ -91,6 +91,11 @@ type-only imports disappear from emitted JavaScript. Install dependencies first 
 `composer install --no-interaction` when needed. Install browser binaries using
 `pnpm exec playwright install chromium firefox webkit`.
 
+Run `pnpm test:unit:coverage` for V8 unit-test coverage across `src/ts`, including
+uncovered modules. It prints a terminal summary and writes `coverage/index.html`
+and `coverage/lcov.info`. Reports are gitignored; coverage thresholds are not
+imposed. Browser-test coverage is separate from this report.
+
 Browser tests compile fixture modules into `.cache/browser-fixtures/` and load
 the actual delivered assets. Projects cover Chromium, Firefox, WebKit, and
 mobile Chromium/WebKit viewports. Expectations follow measured capabilities;
