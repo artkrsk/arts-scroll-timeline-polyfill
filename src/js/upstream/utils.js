@@ -1,3 +1,5 @@
+import { artsSplitCSS } from '../arts/css-values.js';
+
 const canonicalUnits = new Set(["px", "deg", "s", "hz", "dppx", "number", "fr"]);
 
 export function isCanonical(unit) {
@@ -37,44 +39,5 @@ export function normalizeAxis(axis, computedStyle) {
  * @return {string[]}
  */
 export function splitIntoComponentValues(input) {
-  const res = [];
-  let i = 0;
-
-  function consumeComponentValue() {
-    let level = 0;
-    const startIndex = i;
-    while (i < input.length) {
-      const nextChar = input.slice(i, i + 1);
-      if (/\s/.test(nextChar) && level === 0) {
-        break;
-      } else if (nextChar === '(') {
-        level += 1;
-      } else if (nextChar === ')') {
-        level -= 1;
-        if (level === 0) {
-          // Consume the next character and break
-          i++;
-          break;
-        }
-      }
-      i++;
-    }
-    return input.slice(startIndex, i);
-  }
-
-  function consumeWhitespace() {
-    while (/\s/.test(input.slice(i, i + 1))) {
-      i++;
-    }
-  }
-
-  while(i < input.length) {
-    const nextChar = input.slice(i, i + 1);
-    if (/\s/.test(nextChar)) {
-      consumeWhitespace();
-    } else {
-      res.push(consumeComponentValue());
-    }
-  }
-  return res;
+  return artsSplitCSS(input, ' ');
 }

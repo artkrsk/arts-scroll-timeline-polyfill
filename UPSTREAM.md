@@ -19,13 +19,16 @@ the upstream modules expose named internal hooks and carry these focused fixes:
 2. Keep both native-support guards. A browser must support named and anonymous
    timeline syntax and animation ranges before bypassing the bundle.
 3. Avoid measuring a detached source and dividing by a zero-length animation
-   range. Release observers when an unused timeline is discarded, and reject
-   unsupported timeline objects without calling an absent upstream helper.
+   range. Release a timeline's weak reference and observers when its source
+   changes or it is discarded; sample the source that owns each observer.
+   Keep the no-inset programmatic range distinct from CSS `auto` insets, and
+   reject unsupported timeline objects without calling an absent upstream helper.
 4. Bootstrap `auto` and omitted CSS animation durations without changing
    explicit durations, fill modes, or unrelated animation-list slots. Split
    CSS lists around nested functions, strings, escapes, and comments.
 5. Resolve view-timeline inset variables against the subject, including
-   fallbacks, inheritance changes, and geometry refreshes.
+   fallbacks, inheritance changes, and geometry refreshes. Repeat inset and
+   axis lists by their own lengths when a rule declares multiple timelines.
 6. Replace stylesheet registrations in DOM order after HMR, including repeated
    identical authored text. Rebind existing animation proxies, release removed
    bindings, and bound mutation processing to changed nodes.

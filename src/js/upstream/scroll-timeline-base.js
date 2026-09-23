@@ -257,12 +257,11 @@ export function updateSource(timeline, source) {
   if (oldSource) {
     const details = sourceDetails.get(oldSource);
     if (details) {
-      // Remove timeline reference from old source
-      details.timelineRefs.delete(timeline);
-
-      // Clean up timeline refs that have been garbage-collected
-      const undefinedRefs = Array.from(details.timelineRefs).filter(ref => typeof ref.deref() === 'undefined');
-      for (const ref of undefinedRefs) {
+      // The set contains WeakRef objects, so deleting the timeline itself
+      // cannot remove its reference. Also release collected timelines.
+      const staleRefs = Array.from(details.timelineRefs).filter(ref =>
+        typeof ref.deref() === 'undefined' || ref.deref() === timeline);
+      for (const ref of staleRefs) {
         details.timelineRefs.delete(ref);
       }
 
@@ -287,10 +286,8 @@ export function updateSource(timeline, source) {
       sourceDetails.set(source, details);
 
       // Use resize observer to detect changes to source size
-      const resizeObserver = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          updateMeasurements(timelineDetails.source)
-        }
+      const resizeObserver = new ResizeObserver(() => {
+        updateMeasurements(source);
       });
       resizeObserver.observe(source);
       for (const child of source.children) {
@@ -602,17 +599,16 @@ export function getScrollParent(node) {
 // timing to be renormalized.
 export function range(timeline, phase) {
   const details = scrollTimelineOptions.get(timeline);
-  const subjectMeasurements = details.subjectMeasurements
-  const sourceMeasurements = sourceDetails.get(details.source).sourceMeasurements
-
   const unresolved = null;
-  if (timeline.phase === 'inactive')
+  if (!details.source || !details.source.isConnected || timeline.phase === 'inactive')
     return unresolved;
 
   if (!(timeline instanceof ViewTimeline))
     return unresolved;
 
   artsRefreshInset(details);
+  const subjectMeasurements = details.subjectMeasurements;
+  const sourceMeasurements = sourceDetails.get(details.source).sourceMeasurements;
   return calculateRange(phase, sourceMeasurements, subjectMeasurements, details.axis, details.inset);
 }
 
@@ -839,8 +835,10 @@ export class ViewTimeline extends ScrollTimeline {
     const details = scrollTimelineOptions.get(this);
     details.subject = options && options.subject ? options.subject : undefined;
     // TODO: Handle insets.
-    details.artsInset = options?.inset ?? 'auto';
-    artsRefreshInset(details);
+    if (options && options.inset) {
+      details.artsInset = options.inset;
+      artsRefreshInset(details);
+    }
     if (details.subject) {
       const resizeObserver = new ResizeObserver(() => {
         updateMeasurements(details.source)

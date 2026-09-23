@@ -395,10 +395,10 @@ export class StyleParser {
 
     for(let i = 0; i < timelines.length; i++) {
       if(insets.length)
-        timelines[i].inset = insets[i % timelines.length];
+        timelines[i].inset = insets[i % insets.length];
 
       if(axes.length)
-        timelines[i].axis = axes[i % timelines.length];
+        timelines[i].axis = axes[i % axes.length];
     }
 
     this.subjectSelectorToViewTimeline.push(...timelines);

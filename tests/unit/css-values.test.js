@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { artsParseInset, artsResolveVars, artsSplitCSS } from '../../src/js/arts/css-values.js'
+import { splitIntoComponentValues } from '../../src/js/upstream/utils.js'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -13,6 +14,10 @@ describe('CSS value helpers', () => {
     expect(artsSplitCSS('var(--inset, calc(2px + 3px)) 0px', ' ')).toEqual([
       'var(--inset, calc(2px + 3px))',
       '0px',
+    ])
+    expect(splitIntoComponentValues('calc(0% + 50px) calc(100% - 50px)')).toEqual([
+      'calc(0% + 50px)',
+      'calc(100% - 50px)',
     ])
   })
 
