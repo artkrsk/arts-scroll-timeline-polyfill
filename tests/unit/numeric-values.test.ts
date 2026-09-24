@@ -353,6 +353,7 @@ describe('simplifyCalculation', () => {
       () => new numeric.CSSMathInvert(new numeric.CSSMathInvert(numeric.CSS.px(2))),
       '2px',
     ],
+    ['an inverted number', () => new numeric.CSSMathInvert(4), '0.25'],
     ['an inverted dimension', () => new numeric.CSSMathInvert(numeric.CSS.px(2)), 'calc(1 / 2px)'],
     [
       'nested sums',

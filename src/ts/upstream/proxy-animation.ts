@@ -185,7 +185,7 @@ function commitPendingPlay(details: AnimationState): void {
     applyPendingPlaybackRate(details)
     const playbackRate = details.animation.playbackRate
     if (playbackRate === 0) {
-      details.holdTime = null
+      details.holdTime = currentTimeToMatch
       details.startTime = timelineTime
     } else {
       details.startTime = timelineTime - currentTimeToMatch / playbackRate
@@ -474,19 +474,20 @@ function _hasActiveTimeline(details: AnimationState): boolean {
 function syncCurrentTime(details: AnimationState): void {
   if (!details.timeline) return
 
-  if (details.startTime !== null) {
-    const timelineTime = details.timeline.currentTime
-    if (timelineTime == null) return
-
-    const timelineTimeMs = required(fromCssNumberish(details, timelineTime))
-
-    setNativeCurrentTime(
-      details,
-      (timelineTimeMs - details.startTime) * details.animation.playbackRate,
-    )
-  } else if (details.holdTime !== null) {
+  if (details.holdTime !== null) {
     setNativeCurrentTime(details, details.holdTime)
+    return
   }
+  if (details.startTime === null) return
+
+  const timelineTime = details.timeline.currentTime
+  if (timelineTime == null) return
+
+  const timelineTimeMs = required(fromCssNumberish(details, timelineTime))
+  setNativeCurrentTime(
+    details,
+    (timelineTimeMs - details.startTime) * details.animation.playbackRate,
+  )
 }
 
 // Sets the time of the underlying animation, nudging the time slightly if at
@@ -600,7 +601,7 @@ function playInternal(details: AnimationState, _autoRewind: boolean): void {
 
   // 8. If animation's hold time is resolved, let its start time be
   //     unresolved.
-  if (details.holdTime) {
+  if (details.holdTime !== null) {
     details.startTime = null
   }
 
@@ -684,20 +685,14 @@ function tickAnimation(this: ProxyAnimation, timelineTime: PolyfillUnitValue | n
 
   const playState = this.playState
   if (playState === 'running' || playState === 'finished') {
-    const timelineTimeMs = required(fromCssNumberish(details, timelineTime))
-
-    setNativeCurrentTime(
-      details,
-      (timelineTimeMs - required(fromCssNumberish(details, this.startTime))) * this.playbackRate,
-    )
-
+    syncCurrentTime(details)
     updateFinishedState(details, false, false)
   }
 }
 
 function renormalizeTiming(details: AnimationState): void {
-  // Force renormalization.
-  details.specifiedTiming = null
+  // The native effect may already contain normalized milliseconds. Keep the authored timing.
+  details.normalizedTiming = null
 }
 
 function readTiming(effect: PolyfillAnimationEffect | null): NativeTiming {
@@ -721,8 +716,8 @@ function createProxyEffect(details: AnimationState): PolyfillAnimationEffect {
   const effect = required(details.animation.effect)
   const nativeUpdateTiming = effect.updateTiming.bind(effect)
   const getTiming = (): NativeTiming => {
-    if (details.specifiedTiming) return details.specifiedTiming
-    details.specifiedTiming = readTiming(effect)
+    details.specifiedTiming ??= readTiming(effect)
+    if (details.normalizedTiming) return details.specifiedTiming
     const timing = { ...details.specifiedTiming }
     if (timing.duration === Infinity)
       throw new TypeError('Effect duration cannot be Infinity on a scroll timeline')
@@ -773,6 +768,7 @@ function createProxyEffect(details: AnimationState): PolyfillAnimationEffect {
     }
     if (details.specifiedTiming) nativeUpdateTiming(details.specifiedTiming)
     nativeUpdateTiming(options)
+    details.specifiedTiming = null
     renormalizeTiming(details)
   }
   // The native receiver is retained for DOM getters and methods; only these three methods are adapted.
@@ -916,8 +912,8 @@ function autoAlignStartTime(details: AnimationState): void {
   const playbackRate = effectivePlaybackRate(details)
   details.startTime = fromCssNumberish(details, playbackRate >= 0 ? startOffset : endOffset)
 
-  // 8. Clear hold time.
-  details.holdTime = null
+  // Keep a frozen animation's current time: its aligned start time cannot determine it at zero rate.
+  if (details.animation.playbackRate !== 0) details.holdTime = null
 
   // Additional polyfill step needed to renormalize timing when range has changed
   if (details.rangeDuration !== previousRangeDuration) {

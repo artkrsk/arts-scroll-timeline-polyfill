@@ -234,7 +234,9 @@ export function simplifyCalculation(
   // If root’s child is an Invert node, return the child’s child.
   // Return root.
   if (root instanceof cssNumeric.CSSMathInvert) {
-    if (root.value instanceof cssNumeric.CSSMathInvert) {
+    if (root.value instanceof cssNumeric.CSSUnitValue && root.value.unit === 'number') {
+      return new cssNumeric.CSSUnitValue(1 / root.value.value, 'number')
+    } else if (root.value instanceof cssNumeric.CSSMathInvert) {
       return root.value.value
     } else {
       return root
