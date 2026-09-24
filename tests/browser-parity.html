@@ -23,6 +23,7 @@
     #omitted { animation-name: fixture-fade; animation-timing-function: linear; animation-timeline: --fixture; animation-range: cover; }
     #explicit { animation: fixture-fade 2s linear both; animation-timeline: --fixture; animation-range: cover; }
     #list { animation: fixture-fade auto linear both, fixture-move 2s linear both; animation-timeline: --fixture, --fixture; animation-range: cover, cover; }
+    #important { animation: fixture-fade auto!important; animation-timeline: --fixture !important; }
     #zero-subject { block-size: 300px; view-timeline: --zero block; }
     #zero-probe { animation: fixture-fade auto linear both; animation-timeline: --zero; animation-range: contain; }
   </style>
@@ -37,6 +38,7 @@
     <div id="omitted" class="probe">omitted duration</div>
     <div id="explicit" class="probe">explicit duration</div>
     <div id="list" class="probe">animation list</div>
+    <div id="important" class="probe">important shorthand</div>
   </div><div id="zero-subject"><div id="zero-probe" class="probe">zero contain range</div></div><div class="spacer"></div></div>
   <pre id="result">Running…</pre>
 </body>

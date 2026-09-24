@@ -135,7 +135,11 @@ artsParserPrototype.handleScrollTimelineProps = function (rule, sheet) {
   const rewritten = declarations.map((declaration) => {
     const colon = declaration.indexOf(':')
     if (declaration.slice(0, colon).trim() !== 'animation') return declaration
-    const items = artsSplitCSS(declaration.slice(colon + 1)).map((item, index) => {
+    // `!important` needs no preceding whitespace; keep it out of the last list item.
+    const raw = declaration.slice(colon + 1)
+    const body = raw.replace(/\s*!important\s*$/i, '')
+    const flag = raw.slice(body.length)
+    const items = artsSplitCSS(body).map((item, index) => {
       const tokens = artsSplitCSS(item, ' '),
         auto = tokens.indexOf('auto')
       if (auto < 0) return item
@@ -144,7 +148,7 @@ artsParserPrototype.handleScrollTimelineProps = function (rule, sheet) {
       shorthandChanged = true
       return tokens.join(' ')
     })
-    return declaration.slice(0, colon + 1) + items.join(',')
+    return declaration.slice(0, colon + 1) + items.join(',') + flag
   })
   if (changed || shorthandChanged) {
     rule.block.contents =
