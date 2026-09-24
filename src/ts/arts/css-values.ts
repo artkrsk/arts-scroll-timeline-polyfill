@@ -121,11 +121,17 @@ export function artsResolveVars(
   }
   return output + value.slice(cursor)
 }
+// css-values-4 §6.1: a literal unitless zero is a <length>; calc(0) and other numbers are not.
+const cssNumber = /^[+-]?(?:\d*\.)?\d+(?:e[+-]?\d+)?$/i
 export function artsParseInset(value: PolyfillInset): ParsedInset {
   const input =
     typeof value === 'string'
       ? artsSplitCSS(value, ' ').map((part) =>
-          part === 'auto' ? part : numeric.CSSNumericValue.parse(part),
+          part === 'auto'
+            ? part
+            : cssNumber.test(part) && Number(part) === 0
+              ? numeric.CSS.px(0)
+              : numeric.CSSNumericValue.parse(part),
         )
       : value
   if (!input.length || input.length > 2) throw new TypeError('Invalid inset')

@@ -45,6 +45,13 @@ describe('Typed OM numeric subset', () => {
     expect(() => parseCSSNumericValue('calc(2px +)')).toThrow()
     expect(() => parseCSSNumericValue('1unsupported')).toThrow()
   })
+  it('unwraps min() and max() once partial simplification leaves one child', () => {
+    expect(String(simplifyCalculation(parseCSSNumericValue('max(1em, 2em)')))).toBe('2em')
+    expect(String(simplifyCalculation(parseCSSNumericValue('min(1em, 2em, 50%)')))).toBe(
+      'min(1em, 50%)',
+    )
+    expect(String(numeric.CSSNumericValue.parse('max(1em, 2em)'))).toBe('2em')
+  })
   it('resolves percentages and em lengths only with the required measurement context', () => {
     const value = parseCSSNumericValue('50%')
     expect(String(simplifyCalculation(value))).toBe('50%')

@@ -211,7 +211,7 @@ function isNewline(codePoint: CodePoint): boolean {
 function isWhitespace(codePoint: CodePoint): boolean {
   if (codePoint === undefined) return false
   // A newline, U+0009 CHARACTER TABULATION, or U+0020 SPACE.
-  return isNewline(codePoint) || codePoint === 0x2000 || codePoint === 0x0020
+  return isNewline(codePoint) || codePoint === 0x0009 || codePoint === 0x0020
 }
 
 function isDigit(codePoint: CodePoint): boolean {
@@ -278,11 +278,7 @@ function isNonPrintableCodePoint(codePoint: CodePoint): boolean {
   )
 }
 
-function validEscape(
-  firstCodePoint: CodePoint,
-  secondCodePoint: CodePoint,
-  _third?: CodePoint,
-): boolean {
+function validEscape(firstCodePoint: CodePoint, secondCodePoint: CodePoint): boolean {
   // If the first code point is not U+005C REVERSE SOLIDUS (\), return false.
   // Otherwise, if the second code point is a newline, return false.
   // Otherwise, return true.
@@ -363,7 +359,7 @@ function consumeEscapedCodePoint(input: InputStream): number {
     // hex digit
     // Consume as many hex digits as possible, but no more than 5. Note that this means 1-6 hex digits have been
     // consumed in total.
-    while (isHexDigit(input.peek()[0]) && digits.length < 5) {
+    while (isHexDigit(input.peek()[0]) && digits.length < 6) {
       digits.push(input.consume())
     }
 
@@ -376,7 +372,7 @@ function consumeEscapedCodePoint(input: InputStream): number {
     // than the maximum allowed code point, return U+FFFD REPLACEMENT CHARACTER (�). Otherwise, return the code point
     // with that value.
     const number = parseInt(fromCodePoints(...digits), 16)
-    if (number === 0 || number > 0x10ffff) {
+    if (number === 0 || (number >= 0xd800 && number <= 0xdfff) || number > 0x10ffff) {
       return 0xfffd
     } else {
       return number
@@ -459,7 +455,7 @@ function consumeIdentSequence(input: InputStream): string {
       // ident code point
       // Append the code point to result.
       result += fromCodePoints(codePoint)
-    } else if (validEscape(...input.peek())) {
+    } else if (validEscape(codePoint, input.peek()[0])) {
       // the stream starts with a valid escape
       // Consume an escaped code point. Append the returned code point to result.
       result += fromCodePoints(consumeEscapedCodePoint(input))
@@ -571,7 +567,7 @@ function consumeRemnantsOfBadUrl(input: InputStream): void {
       // EOF
       // Return.
       return
-    } else if (validEscape(...input.peek())) {
+    } else if (validEscape(codePoint, input.peek()[0])) {
       // the input stream starts with a valid escape
       // Consume an escaped code point. This allows an escaped right parenthesis ("\)") to be encountered without
       // ending the <bad-url-token>. This is otherwise identical to the "anything else" clause.
@@ -633,10 +629,10 @@ function consumeUrlToken(input: InputStream): UrlToken | BadUrlToken {
       return new BadUrlToken()
     } else if (codePoint === 0x005c) {
       // U+005C REVERSE SOLIDUS (\)
-      if (validEscape(...input.peek())) {
+      if (validEscape(codePoint, input.peek()[0])) {
         // If the stream starts with a valid escape,
         // consume an escaped code point and append the returned code point to the <url-token>’s value.
-        urlToken.value += consumeEscapedCodePoint(input)
+        urlToken.value += fromCodePoints(consumeEscapedCodePoint(input))
       } else {
         // Otherwise, this is a parse error. Consume the remnants of a bad url, create a <bad-url-token>, and return it.
         consumeRemnantsOfBadUrl(input)
@@ -661,7 +657,7 @@ function consumeIdentLikeToken(
 ): IdentToken | FunctionToken | UrlToken | BadUrlToken {
   // Consume an ident sequence, and let string be the result.
   const str = consumeIdentSequence(input)
-  if (str.match(/url/i) && input.peek()[0] === 0x0028) {
+  if (/^url$/i.test(str) && input.peek()[0] === 0x0028) {
     // If string’s value is an ASCII case-insensitive match for "url",
     // and the next input code point is U+0028 LEFT PARENTHESIS ((), consume it.
     input.consume()
@@ -722,7 +718,7 @@ function consumeToken(input: InputStream): CSSToken | undefined {
     //   Consume an ident sequence, and set the <hash-token>’s value to the returned string.
     //   Return the <hash-token>.
     // Otherwise, return a <delim-token> with its value set to the current input code point.
-    if (isIdentCodePoint(lookahead[0]) || validEscape(...lookahead)) {
+    if (isIdentCodePoint(lookahead[0]) || validEscape(lookahead[0], lookahead[1])) {
       const hashToken = new HashToken()
       if (startsIdentSequence(...lookahead)) {
         hashToken.type = 'id'
@@ -749,7 +745,7 @@ function consumeToken(input: InputStream): CSSToken | undefined {
     // If the input stream starts with a number, reconsume the current input code point, consume a numeric token,
     // and return it.
     // Otherwise, return a <delim-token> with its value set to the current input code point.
-    if (startsNumber(...lookahead)) {
+    if (startsNumber(codePoint, lookahead[0], lookahead[1])) {
       input.reconsume(codePoint)
       return consumeNumericToken(input)
     } else {
@@ -761,7 +757,7 @@ function consumeToken(input: InputStream): CSSToken | undefined {
     return new CommaToken()
   } else if (codePoint === 0x002d) {
     // U+002D HYPHEN-MINUS (-)
-    if (startsNumber(...input.peek())) {
+    if (startsNumber(codePoint, lookahead[0], lookahead[1])) {
       // If the input stream starts with a number, reconsume the current input code point, consume a numeric token, and return it.
       input.reconsume(codePoint)
       return consumeNumericToken(input)
@@ -770,7 +766,7 @@ function consumeToken(input: InputStream): CSSToken | undefined {
       input.consume()
       input.consume()
       return new CDCToken()
-    } else if (startsIdentSequence(...input.peek())) {
+    } else if (startsIdentSequence(codePoint, lookahead[0], lookahead[1])) {
       // Otherwise, if the input stream starts with an ident sequence, reconsume the current input code point, consume an ident-like token, and return it.
       input.reconsume(codePoint)
       return consumeIdentLikeToken(input)
@@ -780,7 +776,7 @@ function consumeToken(input: InputStream): CSSToken | undefined {
     }
   } else if (codePoint === 0x002e) {
     // U+002E FULL STOP (.)
-    if (startsNumber(...input.peek())) {
+    if (startsNumber(codePoint, lookahead[0], lookahead[1])) {
       // If the input stream starts with a number, reconsume the current input code point, consume a numeric token, and return it.
       input.reconsume(codePoint)
       return consumeNumericToken(input)
@@ -824,7 +820,7 @@ function consumeToken(input: InputStream): CSSToken | undefined {
     return new LeftSquareBracketToken()
   } else if (codePoint === 0x005c) {
     // U+005C REVERSE SOLIDUS (\)
-    if (validEscape(...lookahead)) {
+    if (validEscape(codePoint, lookahead[0])) {
       // If the input stream starts with a valid escape, reconsume the current input code point, consume an ident-like token, and return it.
       input.reconsume(codePoint)
       return consumeIdentLikeToken(input)

@@ -35,7 +35,7 @@ async function runFixture(): Promise<void> {
   try {
     scroller.scrollTop = 300
     await settle()
-    for (const id of ['longhand', 'shorthand', 'omitted', 'explicit', 'list']) {
+    for (const id of ['longhand', 'shorthand', 'omitted', 'explicit', 'list', 'important']) {
       const animations = element(`#${id}`, HTMLElement).getAnimations()
       check(
         animations.length === (id === 'list' ? 2 : 1) && animations.every(isView),

@@ -1,6 +1,7 @@
 import type {
   PolyfillNumericValue,
   PolyfillUnitValue,
+  PolyfillMathMinMax,
   PolyfillMathSum,
   PolyfillNumericArray,
 } from '../public/index.js'
@@ -174,6 +175,7 @@ export function simplifyCalculation(
 
   // 5. If root is a Min or Max node, attempt to partially simplify it:
   if (root instanceof cssNumeric.CSSMathMin || root instanceof cssNumeric.CSSMathMax) {
+    let node: PolyfillMathMinMax = root
     const children = Array.from(root.values)
     const [numeric, rest] = partition(
       children,
@@ -195,19 +197,19 @@ export function simplifyCalculation(
         return new cssNumeric.CSSUnitValue(result, required(group[0]).unit)
       })
       if (root instanceof cssNumeric.CSSMathMin) {
-        root = new cssNumeric.CSSMathMin(...combinedGroups, ...rest)
+        node = new cssNumeric.CSSMathMin(...combinedGroups, ...rest)
       } else {
-        root = new cssNumeric.CSSMathMax(...combinedGroups, ...rest)
+        node = new cssNumeric.CSSMathMax(...combinedGroups, ...rest)
       }
     }
 
     //    2. If root has only one child, return the child.
     //
     //       Otherwise, return root.
-    if (children.length === 1) {
-      return required(children[0])
+    if (node.values.length === 1) {
+      return required(node.values[0])
     } else {
-      return root
+      return node
     }
   }
 

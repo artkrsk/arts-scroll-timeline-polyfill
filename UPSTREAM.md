@@ -32,6 +32,11 @@ the upstream modules expose named internal hooks and carry these focused fixes:
 6. Replace stylesheet registrations in DOM order after HMR, including repeated
    identical authored text. Rebind existing animation proxies, release removed
    bindings, and bound mutation processing to changed nodes.
+7. Follow css-syntax-3 in the tokenizer: the `+`, `-`, `.` and `\` decisions
+   include the current code point, escapes consume up to six hex digits and
+   map zero and surrogates to U+FFFD, TAB is whitespace, `url(` matches the
+   whole ident only, and escaped url code points are appended as text.
+   `min()`/`max()` partial simplification unwraps a single remaining child.
 
 ## TypeScript fork
 
@@ -48,7 +53,9 @@ operand validation, and nullable geometry. The stylesheet skip comparison now
 has explicit membership precedence. Numeric zero is a number; converting a unit
 to itself is valid. The unused duplicate inset parser was removed. The effect
 adapter intercepts timing methods while retaining native receivers and source
-methods. Existing no-inset defaults and provider ownership remain covered.
+methods. Existing no-inset defaults and provider ownership remain covered. A
+unitless zero is accepted as a `view-timeline-inset` length, and `!important`
+survives the animation shorthand rewrite.
 
 ## Updating upstream
 

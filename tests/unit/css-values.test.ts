@@ -53,6 +53,17 @@ describe('CSS value helpers', () => {
     expect(() => artsParseInset('1s')).toThrow(TypeError)
     expect(() => artsParseInset([new numeric.CSSKeywordValue('none')])).toThrow(TypeError)
   })
+  it('accepts a unitless zero length only in the CSS string form', () => {
+    expect(String(artsParseInset('0').start)).toBe('0px')
+    expect(String(artsParseInset('0').end)).toBe('0px')
+    expect(String(artsParseInset('0 10px').start)).toBe('0px')
+    expect(String(artsParseInset('0 10px').end)).toBe('10px')
+    expect(artsParseInset('auto 0').start).toBe('auto')
+    expect(String(artsParseInset('auto 0').end)).toBe('0px')
+    expect(() => artsParseInset('5')).toThrow(TypeError)
+    expect(() => artsParseInset('calc(0)')).toThrow(TypeError)
+    expect(() => artsParseInset([new numeric.CSSUnitValue(0, 'number')])).toThrow(TypeError)
+  })
 })
 
 const styleOf = (entries: Record<string, string>) => {
