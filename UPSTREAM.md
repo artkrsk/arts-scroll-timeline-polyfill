@@ -37,6 +37,10 @@ the upstream modules expose named internal hooks and carry these focused fixes:
    map zero and surrogates to U+FFFD, TAB is whitespace, `url(` matches the
    whole ident only, and escaped url code points are appended as text.
    `min()`/`max()` partial simplification unwraps a single remaining child.
+8. Preserve an animation's held time while resuming or playing at zero rate,
+   and keep the native effect synchronized through pending play tasks. Retain
+   specified effect timing when an attachment range is renormalized.
+   Simplify the inverse of a unitless number to its reciprocal.
 
 ## TypeScript fork
 
