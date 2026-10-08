@@ -50,6 +50,22 @@ The package remains private, with generated declarations and export metadata
 prepared for future distribution. See [BROWSER_APIS.md](BROWSER_APIS.md) for
 browser support, API differences, and the Safari/device smoke procedure.
 
+## Browser hosts without WordPress
+
+The public asset entries `@arts/scroll-timeline-polyfill/loader.js` and
+`@arts/scroll-timeline-polyfill/scroll-timeline.js` resolve to the same committed
+scripts used by WordPress. Copy them into your output or resolve them as asset
+URLs with your bundler. They are browser scripts, not passive ESM libraries.
+
+Before inserting the loader script, set `window.__artsScrollTimelinePolyfillSrc`
+to the emitted polyfill URL. Insert the loader once per document, before starting
+timeline consumers. After its script load completes, await
+`window.__artsScrollTimelinePolyfillReady`; its `native`, `polyfilled` and
+`unavailable` states have the same meaning in either host. Native browsers do
+not download the polyfill. Keep the loader and polyfill from the same package
+revision, and preserve `data-aphrodite` on any stylesheet that must be skipped.
+The installed platform polyfill remains document-owned across app teardown.
+
 ## Development
 
 Use Node 24 or newer and pnpm 12.5.1:

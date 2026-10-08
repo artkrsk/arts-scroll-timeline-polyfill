@@ -42,7 +42,9 @@
     },
     "./globals": {
       "types": "./types/globals.d.ts"
-    }
+    },
+    "./loader.js": "./src/php/libraries/scroll-timeline/loader.js",
+    "./scroll-timeline.js": "./src/php/libraries/scroll-timeline/scroll-timeline.js"
   },
   "files": [
     "types",
