@@ -11,6 +11,15 @@
     #track { position: sticky; top: 0; block-size: 100vh; }
     #pinned { block-size: 300px; margin-block-start: 100px; background: #eee; }
     #plain { block-size: 300px; background: #ccc; }
+    /* Sticky boxes whose in-flow place is not under their previous sibling. */
+    #row { display: flex; gap: 40px; align-items: flex-start; block-size: 2000px; }
+    #row > .lead { flex: 1; block-size: 1200px; background: #eee; }
+    #column { display: flex; flex-direction: column; gap: 60px; block-size: 2400px; }
+    #column > .lead { block-size: 300px; margin-block-end: 20px; background: #eee; }
+    #grid { display: grid; grid-template-columns: 1fr 1fr; gap: 50px 20px; block-size: 2400px; align-items: start; }
+    #grid > .lead { block-size: 500px; background: #eee; }
+    .sticky { position: sticky; top: 0; flex: 1; margin-block-start: 10px; }
+    .sticky > div { block-size: 200px; background: #ccc; }
     .tail { block-size: 2000px; }
   </style>
   <style id="fixture-css">
@@ -24,6 +33,9 @@
   <div class="spacer"></div>
   <div id="runway"><div id="track"><div id="pinned"><div id="pinned-exit">exit range</div></div></div></div>
   <div id="plain"></div>
+  <div id="row"><div class="lead"></div><div class="sticky"><div id="row-subject"></div></div></div>
+  <div id="column"><div class="lead"></div><div class="sticky"><div id="column-subject"></div></div></div>
+  <div id="grid"><div class="lead"></div><div class="lead"></div><div class="sticky"><div id="grid-subject"></div></div></div>
   <div class="tail"></div>
 </body>
 </html>

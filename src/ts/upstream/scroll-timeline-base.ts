@@ -220,15 +220,16 @@ export function measureSubject(
   const ancestor = source.offsetParent
   while (node && node !== ancestor) {
     if (!(node instanceof HTMLElement)) return undefined
-    left += node.offsetLeft
-    // Arts: a sticky box's offsetTop includes its current stuck offset. Measure it at its
+    // Arts: a sticky box's offsets include its current stuck offset. Measure it at its
     // in-flow place and record how far it can travel; that travel stretches the range.
-    const sticky = measureSticky(node)
+    const sticky = measureSticky(node, source)
     if (sticky) {
       top += sticky.top
+      left += sticky.left
       stickyTravel += sticky.travel
     } else {
       top += node.offsetTop
+      left += node.offsetLeft
     }
     last = node
     node = node.offsetParent
@@ -257,42 +258,78 @@ export function measureSubject(
 }
 
 /**
- * Arts: block-axis `position: sticky` (upstream TODO). The box's place in flow relative to
- * its offsetParent (after the previous in-flow sibling, else at its containing block's
- * content edge), and how far a `top` constraint lets it travel inside that block. Read
- * from layout only; the current stuck offset never enters. Null for any other box.
+ * Arts: block-axis `position: sticky` (upstream TODO). The box's in-flow place relative to
+ * its offsetParent, and how far a `top` constraint lets it travel inside its containing
+ * block while it sticks to `source`. Null for any other box.
  */
-function measureSticky(node: HTMLElement): { top: number; travel: number } | null {
+function measureSticky(
+  node: HTMLElement,
+  source: HTMLElement,
+): { top: number; left: number; travel: number } | null {
   const style = getComputedStyle(node)
   if (style.position !== 'sticky') return null
-  const block = node.parentElement
-  if (!block) return null
-  const blockStyle = getComputedStyle(block)
-  const marginTop = parseFloat(style.marginTop) || 0
-  // The containing block's padding edge in the offsetParent's coordinates.
+  const place = staticPlace(node)
+  let block = node.parentElement
+  while (block && getComputedStyle(block).display === 'contents') block = block.parentElement
+  if (!block || style.top === 'auto' || !sticksTo(node, source)) return { ...place, travel: 0 }
+  // The containing block's content bottom in the offsetParent's coordinates.
   const blockTop = block === node.offsetParent ? 0 : block.offsetTop + block.clientTop
-  let previous = node.previousElementSibling
-  while (previous && !isInFlow(previous)) previous = previous.previousElementSibling
-  const top =
-    previous instanceof HTMLElement && previous.offsetParent === node.offsetParent
-      ? previous.offsetTop +
-        previous.offsetHeight +
-        Math.max(parseFloat(getComputedStyle(previous).marginBottom) || 0, marginTop)
-      : blockTop + (parseFloat(blockStyle.paddingTop) || 0) + marginTop
-  if (style.top === 'auto') return { top, travel: 0 }
-  const contentBottom = blockTop + block.clientHeight - (parseFloat(blockStyle.paddingBottom) || 0)
-  const bottom = top + node.offsetHeight + (parseFloat(style.marginBottom) || 0)
-  return { top, travel: Math.max(0, contentBottom - bottom) }
+  const contentBottom =
+    blockTop + block.clientHeight - (parseFloat(getComputedStyle(block).paddingBottom) || 0)
+  const bottom = place.top + node.offsetHeight + (parseFloat(style.marginBottom) || 0)
+  return { ...place, travel: Math.max(0, contentBottom - bottom) }
 }
 
-function isInFlow(element: Element): boolean {
-  const style = getComputedStyle(element)
+/** Arts: static places measured in the current task, shared by every subject it measures. */
+const staticPlaces = new Map<HTMLElement, { top: number; left: number }>()
+/** Arts: the `style` attribute an element had before `staticPlace` rewrote it, until the
+ * next task, so the observers below can drop the records of that reverted write. */
+const transientStyles = new WeakMap<Element, string | null>()
+
+/**
+ * Arts: the in-flow place of a sticky box. Layout exposes it only with the stuck offset
+ * added, and no sibling or container arithmetic recovers it in every layout mode (flex
+ * rows, gaps, grid tracks), so the box is laid out once as `position: static` and its
+ * `style` attribute restored in the same task: nothing paints in between.
+ */
+function staticPlace(node: HTMLElement): { top: number; left: number } {
+  const cached = staticPlaces.get(node)
+  if (cached) return cached
+  if (staticPlaces.size === 0) queueMicrotask(() => staticPlaces.clear())
+  const original = node.getAttribute('style')
+  // Attribute writes both ways: after a CSSOM write, Chromium and WebKit leave `style=""`
+  // behind a removed attribute.
+  node.setAttribute('style', `${original ?? ''};position:static!important`)
+  const place = { top: node.offsetTop, left: node.offsetLeft }
+  if (original === null) node.removeAttribute('style')
+  else node.setAttribute('style', original)
+  if (!transientStyles.has(node)) setTimeout(() => transientStyles.delete(node))
+  transientStyles.set(node, original)
+  staticPlaces.set(node, place)
+  return place
+}
+
+/** Arts: a `style` record whose net change `staticPlace` already reverted. */
+function isTransientStyleRecord(record: MutationRecord): boolean {
+  const target = record.target as Element
   return (
-    style.display !== 'none' &&
-    style.display !== 'contents' &&
-    style.position !== 'absolute' &&
-    style.position !== 'fixed'
+    record.type === 'attributes' &&
+    record.attributeName === 'style' &&
+    transientStyles.has(target) &&
+    transientStyles.get(target) === target.getAttribute('style')
   )
+}
+
+/** Arts: whether a sticky box sticks to `source`: no scroll container lies between them. */
+function sticksTo(node: HTMLElement, source: HTMLElement): boolean {
+  for (let element = node.parentElement; element && element !== source; ) {
+    if (element !== document.body) {
+      const { overflowX, overflowY } = getComputedStyle(element)
+      if (!/^(visible|clip)$/.test(overflowX) || !/^(visible|clip)$/.test(overflowY)) return false
+    }
+    element = element.parentElement
+  }
+  return true
 }
 
 /**
@@ -387,6 +424,8 @@ export function updateSource(timeline: ScrollTimeline, source: Element | null): 
       // Use mutation observer to detect updated style attributes on source element
       const mutationObserver = new MutationObserver((records) => {
         for (const record of records) {
+          // Arts: a sticky source's measurement write would re-measure itself forever.
+          if (isTransientStyleRecord(record)) continue
           if (record.target instanceof Element) updateMeasurements(record.target)
         }
       })
@@ -934,7 +973,9 @@ export class ViewTimeline extends ScrollTimeline implements PolyfillViewTimeline
       })
       resizeObserver.observe(details.subject)
 
-      const mutationObserver = new MutationObserver(() => {
+      const mutationObserver = new MutationObserver((records) => {
+        // Arts: a sticky subject's measurement write would re-measure itself forever.
+        if (records.length > 0 && records.every(isTransientStyleRecord)) return
         updateMeasurements(details.source)
       })
       mutationObserver.observe(details.subject, {

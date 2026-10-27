@@ -69,6 +69,50 @@ test('an exit range inside the pin stays inactive until the track releases', asy
   expect(Math.abs((await opacity()) - 0.5)).toBeLessThanOrEqual(0.05)
 })
 
+test('sticky boxes in flex and grid layouts get Chromium ranges', async ({ page }, testInfo) => {
+  const native = await capabilities(page, testInfo)
+  test.skip(
+    !native || testInfo.project.name !== 'chromium',
+    "Compares the polyfill with Chromium's native offsets in the same page",
+  )
+  const vh = await open(page)
+  const subjects = ['#row-subject', '#column-subject', '#grid-subject']
+  const nativeRanges = []
+  for (const subject of subjects) nativeRanges.push(await offsets(page, subject))
+  await forcePolyfill(page)
+  // Before each box sticks, while it is stuck, and after it is released.
+  for (const subject of subjects) {
+    const [nativeStart, nativeEnd] = nativeRanges[subjects.indexOf(subject)] ?? [0, 0]
+    for (const y of [0, nativeStart + vh + 300, nativeEnd]) {
+      await scrollTo(page, y)
+      const [start, end] = await offsets(page, subject)
+      expect(Math.abs(start - nativeStart), `${subject} start at ${y}`).toBeLessThanOrEqual(1)
+      expect(Math.abs(end - nativeEnd), `${subject} end at ${y}`).toBeLessThanOrEqual(1)
+    }
+  }
+})
+
+test('measuring a sticky subject does not re-measure it in a loop', async ({ page }, testInfo) => {
+  const native = await capabilities(page, testInfo)
+  await open(page)
+  if (native) await forcePolyfill(page)
+  const result = await page.evaluate(async () => {
+    const subject = document.querySelector('#row .sticky') as HTMLElement
+    let count = 0
+    new MutationObserver((records) => {
+      count += records.length
+    }).observe(subject, { attributes: true, attributeFilter: ['style'] })
+    new ViewTimeline({ subject, axis: 'block', inset: '0px 0px' })
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const settled = count
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    return { settled, later: count, style: subject.getAttribute('style') }
+  })
+  // The construction and the first resize callback measure; their writes never chain.
+  expect(result.later).toBe(result.settled)
+  expect(result.style).toBeNull()
+})
+
 test('the polyfill counts a root margin as Chromium does', async ({ page }, testInfo) => {
   const native = await capabilities(page, testInfo)
   test.skip(

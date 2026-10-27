@@ -42,12 +42,16 @@ the upstream modules expose named internal hooks and carry these focused fixes:
    specified effect timing when an attachment range is renormalized.
    Simplify the inverse of a unitless number to its reciprocal.
 9. Handle block-axis `position: sticky` (upstream's `TODO: handle position sticky`).
-   A sticky box in the subject's offset chain is measured at its in-flow place (after its
-   previous in-flow sibling, else at its containing block's content edge), never at its
-   stuck offset. The distance a `top` constraint lets it travel inside that block
-   stretches the end of every view range. These are Chromium's offsets: a subject riding
-   a pinned track keeps progressing through the pin, and an `exit` range inside the pin
-   stays inactive until the track releases.
+   A sticky box in the subject's offset chain is measured at its in-flow place, never at
+   its stuck offset: layout exposes that place only with the stuck offset added, so the
+   box is laid out once as `position: static` and its `style` attribute restored in the
+   same task (once per box per task; the subject and source observers drop the records of
+   that reverted write). Sibling arithmetic cannot recover the place in flex rows, gaps or
+   grid tracks. When the box sticks to the timeline's source, the distance a `top`
+   constraint lets it travel inside its containing block stretches the end of every view
+   range. These are Chromium's offsets: a subject riding a pinned track keeps progressing
+   through the pin, and an `exit` range inside the pin stays inactive until the track
+   releases.
 10. Measure a document scroller's subject from the initial containing block. The offset
    chain ends at the body, below any root margin (WordPress's admin bar sets
    `html { margin-top }`), and upstream then subtracted the root's `offsetTop` as well.
