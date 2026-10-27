@@ -35,6 +35,8 @@ export interface SubjectMeasurements {
   offsetWidth: number
   offsetHeight: number
   fontSize: string
+  /** How far sticky ancestors (or the subject) can travel along the block axis while stuck. */
+  stickyTravel: number
 }
 export interface SourceState {
   timelineRefs: Set<WeakRef<ScrollTimeline>>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sticky view timeline fixture</title>
+  <style data-aphrodite>
+    body { margin: 0; font: 14px system-ui; }
+    .spacer { block-size: 400px; }
+    #runway { position: relative; block-size: 3000px; }
+    #track { position: sticky; top: 0; block-size: 100vh; }
+    #pinned { block-size: 300px; margin-block-start: 100px; background: #eee; }
+    #plain { block-size: 300px; background: #ccc; }
+    .tail { block-size: 2000px; }
+  </style>
+  <style id="fixture-css">
+    @keyframes fixture-fade { from { opacity: 0; } to { opacity: 1; } }
+    #pinned { view-timeline: --pinned block; }
+    #pinned-exit { animation: fixture-fade auto linear both; animation-timeline: --pinned; animation-range: exit; }
+  </style>
+  <script type="module" src="./fixtures/sticky.ts"></script>
+</head>
+<body>
+  <div class="spacer"></div>
+  <div id="runway"><div id="track"><div id="pinned"><div id="pinned-exit">exit range</div></div></div></div>
+  <div id="plain"></div>
+  <div class="tail"></div>
+</body>
+</html>

@@ -200,6 +200,7 @@ describe('source and subject measurement', () => {
       offsetWidth: 50,
       offsetHeight: 80,
       fontSize: '16px',
+      stickyTravel: 0,
     })
     const wrapper = createElement({ offsetTop: 100, offsetLeft: 200, offsetParent: source })
     Object.assign(subject, { offsetTop: 50, offsetLeft: 50, offsetParent: wrapper })

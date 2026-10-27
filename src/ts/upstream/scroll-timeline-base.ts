@@ -214,16 +214,37 @@ export function measureSubject(
   }
   let top = 0
   let left = 0
+  let stickyTravel = 0
   let node: Element | null = subject
+  let last: HTMLElement = subject
   const ancestor = source.offsetParent
   while (node && node !== ancestor) {
     if (!(node instanceof HTMLElement)) return undefined
     left += node.offsetLeft
-    top += node.offsetTop
+    // Arts: a sticky box's offsetTop includes its current stuck offset. Measure it at its
+    // in-flow place and record how far it can travel; that travel stretches the range.
+    const sticky = measureSticky(node)
+    if (sticky) {
+      top += sticky.top
+      stickyTravel += sticky.travel
+    } else {
+      top += node.offsetTop
+    }
+    last = node
     node = node.offsetParent
   }
-  left -= source.offsetLeft + source.clientLeft
-  top -= source.offsetTop + source.clientTop
+  if (ancestor === null && source === document.scrollingElement && last !== subject) {
+    // Arts: a document scroller measures from the initial containing block, and its offset
+    // chain ends at the body, below any root margin (WordPress's admin bar sets
+    // `html { margin-top }`), which upstream then subtracted again through the root's
+    // `offsetTop`. Anchor the chain where the body really is instead.
+    const anchor = last.getBoundingClientRect()
+    top += anchor.top + source.scrollTop - last.offsetTop
+    left += anchor.left + source.scrollLeft - last.offsetLeft
+  } else {
+    left -= source.offsetLeft + source.clientLeft
+    top -= source.offsetTop + source.clientTop
+  }
   const style = getComputedStyle(subject)
   return {
     top,
@@ -231,7 +252,47 @@ export function measureSubject(
     offsetWidth: subject.offsetWidth,
     offsetHeight: subject.offsetHeight,
     fontSize: style.fontSize,
+    stickyTravel,
   }
+}
+
+/**
+ * Arts: block-axis `position: sticky` (upstream TODO). The box's place in flow relative to
+ * its offsetParent (after the previous in-flow sibling, else at its containing block's
+ * content edge), and how far a `top` constraint lets it travel inside that block. Read
+ * from layout only; the current stuck offset never enters. Null for any other box.
+ */
+function measureSticky(node: HTMLElement): { top: number; travel: number } | null {
+  const style = getComputedStyle(node)
+  if (style.position !== 'sticky') return null
+  const block = node.parentElement
+  if (!block) return null
+  const blockStyle = getComputedStyle(block)
+  const marginTop = parseFloat(style.marginTop) || 0
+  // The containing block's padding edge in the offsetParent's coordinates.
+  const blockTop = block === node.offsetParent ? 0 : block.offsetTop + block.clientTop
+  let previous = node.previousElementSibling
+  while (previous && !isInFlow(previous)) previous = previous.previousElementSibling
+  const top =
+    previous instanceof HTMLElement && previous.offsetParent === node.offsetParent
+      ? previous.offsetTop +
+        previous.offsetHeight +
+        Math.max(parseFloat(getComputedStyle(previous).marginBottom) || 0, marginTop)
+      : blockTop + (parseFloat(blockStyle.paddingTop) || 0) + marginTop
+  if (style.top === 'auto') return { top, travel: 0 }
+  const contentBottom = blockTop + block.clientHeight - (parseFloat(blockStyle.paddingBottom) || 0)
+  const bottom = top + node.offsetHeight + (parseFloat(style.marginBottom) || 0)
+  return { top, travel: Math.max(0, contentBottom - bottom) }
+}
+
+function isInFlow(element: Element): boolean {
+  const style = getComputedStyle(element)
+  return (
+    style.display !== 'none' &&
+    style.display !== 'contents' &&
+    style.position !== 'absolute' &&
+    style.position !== 'fixed'
+  )
 }
 
 /**
@@ -659,7 +720,7 @@ export function calculateRange(
   axis: ScrollAxis,
   optionsInset: ParsedInset | null,
 ): NumericRange {
-  // TODO: handle position sticky
+  // Arts: block-axis sticky is handled through `subjectMeasurements.stickyTravel`.
 
   // Determine the view and container size based on the scroll direction.
   // The view position is the scroll position of the logical starting edge
@@ -673,7 +734,8 @@ export function calculateRange(
     scrollPadding: ['0px', '0px'],
     containerSize: 0,
   }
-  if (normalizeAxis(axis, sourceMeasurements) === 'x') {
+  const blockAxis = normalizeAxis(axis, sourceMeasurements) !== 'x'
+  if (!blockAxis) {
     viewSize = subjectMeasurements.offsetWidth
     viewPos = subjectMeasurements.left
     sizes.scrollPadding = [
@@ -709,7 +771,10 @@ export function calculateRange(
   // element’s principal box coincides with the start edge of its view progress
   // visibility range.
   const coverStartOffset = viewPos - sizes.containerSize + inset.end
-  const coverEndOffset = viewPos + viewSize - inset.start
+  // Arts: a stuck subject stays in view while its sticky box travels, so the range ends
+  // that much later (Chromium's offsets: the start at the in-flow place, the end stretched).
+  const coverEndOffset =
+    viewPos + viewSize - inset.start + (blockAxis ? subjectMeasurements.stickyTravel : 0)
 
   // Contain:
   // The 0% progress represents the earlier of the following positions:

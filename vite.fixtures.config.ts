@@ -8,7 +8,12 @@ export default defineConfig({
     outDir: '.cache/browser-fixtures',
     target: 'es2022',
     rollupOptions: {
-      input: ['tests/browser-parity.html', 'tests/loader.html', 'tests/legacy-provider.html'],
+      input: [
+        'tests/browser-parity.html',
+        'tests/loader.html',
+        'tests/legacy-provider.html',
+        'tests/sticky-parity.html',
+      ],
     },
   },
   plugins: [

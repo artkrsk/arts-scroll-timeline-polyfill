@@ -31,6 +31,7 @@ const subject: SubjectMeasurements = {
   offsetWidth: 50,
   offsetHeight: 80,
   fontSize: '16px',
+  stickyTravel: 0,
 }
 
 describe('timeline geometry', () => {

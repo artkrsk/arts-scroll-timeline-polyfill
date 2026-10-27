@@ -8,5 +8,6 @@ declare global {
       failed: string[]
       errors: string[]
     }
+    __artsStickyFixture?: { ready: boolean }
   }
 }
