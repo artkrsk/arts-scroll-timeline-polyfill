@@ -57,6 +57,10 @@ the upstream modules expose named internal hooks and carry these focused fixes:
    `html { margin-top }`), and upstream then subtracted the root's `offsetTop` as well.
    The chain is anchored where the body really is, as Chromium places it; element
    scrollers keep upstream's subtraction.
+11. Check DOM nodes by `nodeType`, namespace and local name (`src/ts/platform/dom.ts`),
+   never `instanceof`. A node built by another window fails `instanceof` against this
+   window's classes, and the Elementor editor builds its whole preview tree from the top
+   window: upstream skipped those subjects and the `<style>` elements the editor injects.
 
 ## TypeScript fork
 

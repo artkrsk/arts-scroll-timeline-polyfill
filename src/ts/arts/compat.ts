@@ -34,6 +34,7 @@ import {
   nativeDocumentGetAnimations,
   nativeElementGetAnimations,
 } from '../upstream/proxy-animation.js'
+import { isElement, isLinkElement, isStyleElement } from '../platform/dom.js'
 import { artsSplitCSS, artsRefreshInset, artsClearInsetCache } from './css-values.js'
 
 const artsParserPrototype = StyleParser.prototype
@@ -259,7 +260,7 @@ function artsBind(animation: Animation): void {
   if (
     !(animation instanceof CSSAnimation) ||
     !(animation.effect instanceof KeyframeEffect) ||
-    !(animation.effect.target instanceof Element)
+    !isElement(animation.effect.target)
   )
     return
   const target = animation.effect.target
@@ -382,8 +383,8 @@ export function initArtsCSSPolyfill(): void {
       .catch(() => {})
   }
   function visit(node: Node): void {
-    if (node instanceof HTMLStyleElement) inline(node)
-    else if (node instanceof HTMLLinkElement) link(node)
+    if (isStyleElement(node)) inline(node)
+    else if (isLinkElement(node)) link(node)
   }
   let variablesPending = false
   const variableTargets = new Set<Node>()
@@ -415,8 +416,7 @@ export function initArtsCSSPolyfill(): void {
     for (const record of records) {
       const element =
         record.target.nodeType === Node.TEXT_NODE ? record.target.parentElement : record.target
-      if (element instanceof HTMLStyleElement || element instanceof HTMLLinkElement)
-        changed.add(element)
+      if (isStyleElement(element) || isLinkElement(element)) changed.add(element)
       else if (record.type === 'attributes') {
         artsClearInsetCache()
         if (element) variableTargets.add(element)
@@ -426,12 +426,12 @@ export function initArtsCSSPolyfill(): void {
         }
       }
       for (const node of record.addedNodes) {
-        if (node instanceof Element) {
+        if (isElement(node)) {
           if (node.matches('style,link')) changed.add(node)
           for (const sheet of node.querySelectorAll('style,link')) changed.add(sheet)
         }
       }
-      for (const node of record.removedNodes) if (node instanceof Element) removed.push(node)
+      for (const node of record.removedNodes) if (isElement(node)) removed.push(node)
     }
     for (const node of changed) if (node.isConnected) visit(node)
     if (removed.length) {
@@ -490,7 +490,7 @@ export function initArtsCSSPolyfill(): void {
     artsScheduleRefresh()
   })
   window.addEventListener('animationstart', (event) => {
-    if (!(event.target instanceof Element)) return
+    if (!isElement(event.target)) return
     for (const animation of nativeElementGetAnimations.call(event.target))
       if (animation instanceof CSSAnimation && animation.animationName === event.animationName)
         artsBind(animation)

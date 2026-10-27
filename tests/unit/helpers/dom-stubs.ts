@@ -166,6 +166,9 @@ export class FakeAnimation extends EventTarget {
 }
 
 export class FakeElement extends EventTarget {
+  nodeType = 1
+  namespaceURI = 'http://www.w3.org/1999/xhtml'
+  localName = 'div'
   isConnected = true
   scrollTop = 0
   scrollLeft = 0

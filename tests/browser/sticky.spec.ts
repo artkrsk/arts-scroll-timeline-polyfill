@@ -133,3 +133,20 @@ test('the polyfill counts a root margin as Chromium does', async ({ page }, test
     expect(Math.abs(end - nativeEnd)).toBeLessThanOrEqual(1)
   }
 })
+
+test('a subject built by another window is measured', async ({ page }, testInfo) => {
+  const native = await capabilities(page, testInfo)
+  await open(page)
+  if (native) await forcePolyfill(page)
+  const start = await page.evaluate(async () => {
+    // The Elementor editor builds its preview's tree from the top window this way.
+    const frame = document.createElement('iframe')
+    document.body.append(frame)
+    const subject = frame.contentDocument?.createElement('div') as HTMLElement
+    subject.style.blockSize = '200px'
+    document.querySelector('#plain')?.append(subject)
+    const timeline = new ViewTimeline({ subject, axis: 'block', inset: '0px 0px' })
+    return timeline.startOffset === null ? null : Number.parseFloat(timeline.startOffset.toString())
+  })
+  expect(start).not.toBeNull()
+})

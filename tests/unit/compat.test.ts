@@ -29,6 +29,7 @@ const env = vi.hoisted(() => {
     }
   }
   class FakeElement extends FakeNode {
+    readonly namespaceURI = 'http://www.w3.org/1999/xhtml'
     readonly tag: string
     className: string
     readonly children: FakeElement[] = []
@@ -40,6 +41,9 @@ const env = vi.hoisted(() => {
       super()
       this.tag = tag
       this.className = className
+    }
+    get localName(): string {
+      return this.tag
     }
     append(...children: FakeElement[]): this {
       for (const child of children) {
@@ -632,7 +636,6 @@ describe('initArtsCSSPolyfill', () => {
     beforeAll(() => {
       vi.stubGlobal('getComputedStyle', () => computed)
       vi.stubGlobal('ResizeObserver', FakeResizeObserver)
-      vi.stubGlobal('HTMLElement', class {})
       wrapper.append(scroller, viewer, named)
       env.root.append(sheetNode, wrapper)
       mutate({ type: 'childList', target: env.root, addedNodes: [sheetNode, wrapper] })

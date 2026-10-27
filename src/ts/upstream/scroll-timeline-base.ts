@@ -21,6 +21,7 @@ import type {
 } from './timeline-types.js'
 import { required, item } from '../platform/assertions.js'
 import { DEFAULT_TIMELINE_AXIS, isTimelineAxis } from '../platform/constants.js'
+import { isElement, isHTMLElement } from '../platform/dom.js'
 export { ANIMATION_RANGE_NAMES } from '../platform/constants.js'
 import { numeric } from '../platform/numeric-api.js'
 // Copyright 2019 Google LLC
@@ -209,7 +210,7 @@ export function measureSubject(
   source: Element | null,
   subject: Element | null,
 ): SubjectMeasurements | undefined {
-  if (!(source instanceof HTMLElement) || !(subject instanceof HTMLElement)) {
+  if (!isHTMLElement(source) || !isHTMLElement(subject)) {
     return
   }
   let top = 0
@@ -219,7 +220,7 @@ export function measureSubject(
   let last: HTMLElement = subject
   const ancestor = source.offsetParent
   while (node && node !== ancestor) {
-    if (!(node instanceof HTMLElement)) return undefined
+    if (!isHTMLElement(node)) return undefined
     // Arts: a sticky box's offsets include its current stuck offset. Measure it at its
     // in-flow place and record how far it can travel; that travel stretches the range.
     const sticky = measureSticky(node, source)
@@ -426,7 +427,7 @@ export function updateSource(timeline: ScrollTimeline, source: Element | null): 
         for (const record of records) {
           // Arts: a sticky source's measurement write would re-measure itself forever.
           if (isTransientStyleRecord(record)) continue
-          if (record.target instanceof Element) updateMeasurements(record.target)
+          if (isElement(record.target)) updateMeasurements(record.target)
         }
       })
       mutationObserver.observe(source, { attributes: true, attributeFilter: ['style', 'class'] })

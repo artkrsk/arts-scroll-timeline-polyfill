@@ -98,10 +98,12 @@ describe('polyfill entry point', () => {
 
 describe('upstream CSS entry point', () => {
   class StyleElement extends FakeElement {
+    override localName = 'style'
     innerHTML = ''
     dataset: Record<string, string> = {}
   }
   class LinkElement extends FakeElement {
+    override localName = 'link'
     type = 'text/css'
     rel = 'stylesheet'
     href = ''

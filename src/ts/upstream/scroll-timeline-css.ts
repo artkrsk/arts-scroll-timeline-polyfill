@@ -3,6 +3,7 @@ import type { ParsedInset } from '../arts/css-values.js'
 import type { AnimationRelation, ViewBindingOptions, KeyframeMapping } from './parser-types.js'
 import { required } from '../platform/assertions.js'
 import { isRangeName } from '../platform/constants.js'
+import { isElement, isLinkElement, isStyleElement } from '../platform/dom.js'
 import { numeric } from '../platform/numeric-api.js'
 import { StyleParser } from './scroll-timeline-css-parser.js'
 import {
@@ -27,10 +28,10 @@ function initMutationObserver(): void {
   const sheetObserver = new MutationObserver((entries) => {
     for (const entry of entries) {
       for (const addedNode of entry.addedNodes) {
-        if (addedNode instanceof HTMLStyleElement) {
+        if (isStyleElement(addedNode)) {
           handleStyleTag(addedNode)
         }
-        if (addedNode instanceof HTMLLinkElement) {
+        if (isLinkElement(addedNode)) {
           handleLinkedStylesheet(addedNode)
         }
       }
@@ -239,7 +240,7 @@ export function initCSSPolyfill(): void {
   // because we may lose some of the 'animationstart' events by the time 'load' is completed.
   window.addEventListener('animationstart', (evt) => {
     const target = evt.target
-    if (!(target instanceof Element)) return
+    if (!isElement(target)) return
     nativeElementGetAnimations
       .call(target)
       .filter(
