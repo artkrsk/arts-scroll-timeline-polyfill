@@ -130,8 +130,9 @@ artsParserPrototype.handleScrollTimelineProps = function (rule, sheet) {
     }
     return duration === 'auto' ? '0s' : duration
   })
-  // Firefox rejects `auto` inside the shorthand as a whole. Appending the
-  // duration longhand alone cannot recover the lost animation name or easing.
+  // Firefox below 159 rejects `auto` inside the shorthand as a whole.
+  // Appending the duration longhand alone cannot recover the lost animation
+  // name or easing.
   let shorthandChanged = false
   const rewritten = declarations.map((declaration) => {
     const colon = declaration.indexOf(':')

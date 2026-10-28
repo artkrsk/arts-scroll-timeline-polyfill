@@ -15,7 +15,7 @@ See [Vite's browser target documentation](https://vite.dev/guide/build).
 | Browser family | Native scroll timelines | Typed OM numeric APIs | Verification |
 | --- | --- | --- | --- |
 | Chrome / Chromium / Edge | Chromium 115 introduced scroll/view timelines; `timeline-scope` followed in 116 | Chromium 66 introduced numeric Typed OM | Chromium 151.0.7922.34: natural native path, forced polyfill with native numerics, and forced numeric shim |
-| Firefox | Still experimental; do not assume enabled from its version | Experimental; absent in the tested default configuration | Firefox 153.0: genuine CSS polyfill and numeric shim |
+| Firefox | Firefox 159 (27 October 2026) shipped scroll/view timelines, `animation-range` and `timeline-scope`; ESR 153 and earlier releases lack them | Absent in the tested default configuration, 159 included | Firefox 153.0: genuine CSS polyfill and numeric shim. Firefox 159.0 (28 October 2026): the loader resolves `native` |
 | Safari / WebKit | Safari 26 introduced scroll-driven animations | Safari 16.4 introduced numeric Typed OM | Playwright WebKit 26.5: natural native path and isolated forced polyfill cases |
 | Safari on iOS / iPadOS | Safari 26 release family | Safari 16.4 release family | WebKit with an iPhone viewport; physical devices require the smoke procedure below |
 | Chrome Android / Android WebView | Depends on the underlying Chromium version | Depends on the underlying Chromium version | Chromium with a Pixel viewport; a device WebView is not exercised |
