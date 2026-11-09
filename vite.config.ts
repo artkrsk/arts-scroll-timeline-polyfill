@@ -27,7 +27,11 @@ export function libraryConfig(
       watch: watch ? {} : null,
       sourcemap: development,
       minify: development ? false : 'terser',
-      terserOptions: { keep_classnames: /^((View|Scroll)Timeline)|CSS.*$/ },
+      terserOptions: {
+        keep_classnames: /^((View|Scroll)Timeline)|CSS.*$/,
+        // Production prints nothing; the upstream warnings stay in the source.
+        compress: { drop_console: true },
+      },
     },
     plugins: [
       {
