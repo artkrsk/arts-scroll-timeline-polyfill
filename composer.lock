@@ -4,15 +4,21 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8d69cc9e89a273f9255c08ca149c7667",
+    "content-hash": "96d827e318cd45264512b4eb64b78a42",
     "packages": [
         {
             "name": "arts/base",
-            "version": "dev-main",
+            "version": "v1.1.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/artkrsk/arts-base.git",
+                "reference": "f30e6ee4d986819bf92a7fd0e0773178825fa9fa"
+            },
             "dist": {
-                "type": "path",
-                "url": "../ArtsBase",
-                "reference": "6749b9df1da013612bf1e97d99f3bcec8aa1526a"
+                "type": "zip",
+                "url": "https://api.github.com/repos/artkrsk/arts-base/zipball/f30e6ee4d986819bf92a7fd0e0773178825fa9fa",
+                "reference": "f30e6ee4d986819bf92a7fd0e0773178825fa9fa",
+                "shasum": ""
             },
             "require": {
                 "php": ">=8.0"
@@ -32,36 +38,7 @@
                     "Arts\\Base\\": "src/php/"
                 }
             },
-            "scripts": {
-                "post-install-cmd": [
-                    "vendor/bin/captainhook install -f -s"
-                ],
-                "post-update-cmd": [
-                    "vendor/bin/captainhook install -f -s"
-                ],
-                "check": [
-                    "@phpcs",
-                    "@phpstan"
-                ],
-                "fix": [
-                    "@phpcbf"
-                ],
-                "normalize": [
-                    "composer-normalize"
-                ],
-                "phpcbf": [
-                    "phpcbf --standard=phpcs.xml"
-                ],
-                "phpcs": [
-                    "phpcs --standard=phpcs.xml"
-                ],
-                "phpstan": [
-                    "phpstan analyse --memory-limit=1G"
-                ],
-                "phpstan:baseline": [
-                    "phpstan analyse --memory-limit=1G --generate-baseline"
-                ]
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "GPL-3.0-or-later"
             ],
@@ -72,10 +49,11 @@
                 }
             ],
             "description": "Framework-agnostic base classes for Arts WordPress plugins",
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
+            "support": {
+                "issues": "https://github.com/artkrsk/arts-base/issues",
+                "source": "https://github.com/artkrsk/arts-base/tree/v1.1.2"
+            },
+            "time": "2026-09-24T18:40:08+00:00"
         }
     ],
     "packages-dev": [
@@ -2668,9 +2646,7 @@
     ],
     "aliases": [],
     "minimum-stability": "dev",
-    "stability-flags": {
-        "arts/base": 20
-    },
+    "stability-flags": {},
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {

@@ -14,11 +14,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: ArtsScrollTimelinePolyfill
-      - uses: actions/checkout@v4
-        with:
-          repository: artkrsk/arts-base
-          ref: 6749b9df1da013612bf1e97d99f3bcec8aa1526a
-          path: ArtsBase
       - uses: pnpm/action-setup@v4
         with:
           version: 12.5.1
