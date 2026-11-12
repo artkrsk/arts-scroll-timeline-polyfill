@@ -42,7 +42,7 @@ function wp_add_inline_script( string $handle, string $code, string $position ):
 	return true;
 }
 
-require dirname( __DIR__, 2 ) . '/../ArtsBase/src/php/Managers/BaseManager.php';
+require dirname( __DIR__, 2 ) . '/vendor/arts/base/src/php/Managers/BaseManager.php';
 require dirname( __DIR__, 2 ) . '/src/php/Managers/Frontend.php';
 
 $directory = dirname( __DIR__, 2 ) . '/src/php/';
